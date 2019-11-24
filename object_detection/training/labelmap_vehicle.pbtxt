@@ -1,0 +1,9 @@
+item {
+  id: 1
+  name: 'motorbike'
+}
+
+item {
+  id: 2
+  name: 'car'
+}
