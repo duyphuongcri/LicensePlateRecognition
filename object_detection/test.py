@@ -108,7 +108,8 @@ def detect_plate(input_image, list_License_Plate_box):
             list_real_plate_mode.append(False)
             continue
 
-        
+        fn = filename.replace(".png", "{}.png".format(i))
+        cv2.imwrite("")
         
         # Chuyển sang ảnh nhị phân ( ngưỡng = 150); > 150 => 255;   < 150 ==> 0
         # Ảnh nhị phân là ảnh trắng đen ( chỉ có 2 màu trắng và đen tương ứng giá trị 255 và 0)
@@ -189,30 +190,8 @@ def detect_plate(input_image, list_License_Plate_box):
         cv2.imshow("Mask_bot{}".format(i), mask_bot_bw)
         cv2.imshow("bw{}".format(i), cv2.resize(img_bw, (200, int(h_plate*200/w_plate))))
 
-            # rect = cv2.minAreaRect(c) # return (x,y), (w, h), angle
-            # box = cv2.boxPoints(rect)
-            # box = np.int0(box)
-            # cv2.drawContours(mask,[box],-1,(255),-1)    
+ 
 
-        # mask = cv2.bitwise_and(img_bw, mask)
-
-        # mask = rotate_bound(mask, -(90 + rect[2]))
-
-        # result = np.where(mask == 255)
-
-        # y1, x1 = min(result[0]), min(result[1])
-        # y2, x2 = max(result[0]), max(result[1])
-        
-        # offset = 1
-        # img_cropped = img[y1:y2, x1:x2]
-        # license_plate = mask[y1 + offset:y2 - offset, x1 + offset:x2 - offset]
-
-        # license_plate = 255 - license_plate
-
-        # # h, w = license_plate.shape[:2]
-        # # license_plate = cv2.resize(license_plate, (100, int(h*100/w)))
-        # ret, contours, hierarchy = cv2.findContours(license_plate, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) 
-        # contours = sorted(contours, key = cv2.contourArea, reverse = True)[:9] 
     return list_real_plate_mode, list_number_plates
 
 def crop_plate_region(input_image, vehicle_boxes, classID):
@@ -318,7 +297,7 @@ PATH_TO_CKPT_LicensePlate = os.path.join(CWD_PATH,"License_PLate",'frozen_infere
 
 # Path to label map file
 PATH_TO_LABELS_vehicle = os.path.join(CWD_PATH,'training','labelmap_vehicle.pbtxt')
-PATH_TO_LABELS_LicensePlate = os.path.join(CWD_PATH,'training','labelmap.pbtxt')
+PATH_TO_LABELS_LicensePlate = os.path.join(CWD_PATH,'training','labelmap_LicensePlate.pbtxt')
 
 
 # Load the label map.
@@ -396,7 +375,7 @@ def predict_letter(img, model):
     img_class = model.predict(img)
     return img_class.argmax()
 
-model = load_model('E:\\Tensorflow-API\\object_detection\\logs\\0002.h5')
+model = load_model('./logs/0002.h5')
 
 if __name__=="__main__":
     # Parse command line arguments

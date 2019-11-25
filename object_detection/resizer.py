@@ -11,16 +11,19 @@ import numpy as np
 import cv2
 import os
 
-path = "E:\\Tensorflow-API\\object_detection\\Dataset\\10"
+path = "E:\\project\\LicensePLate"
 files = [i for i in os.listdir(path) if i.endswith(".png")]
 
 for filename in files:
 
-    image = cv2.imread(os.path.join(path, filename), 0)
+    image = cv2.imread(os.path.join(path, filename))
     h, w = image.shape[:2]
     
-    pd = int((h - w)/2)
-    padding = [(0, 0), (pd, pd)]
+    pd = w - h
+    if pd > 0:
+        padding = [(0, pd), (0, 0),(0,0)]
+    else:
+        padding = [(0, 0), (0, -pd),(0,0)]
     image = np.pad(image, padding, mode='constant', constant_values=0)
-    resized = cv2.resize(image,(64, 64), interpolation=cv2.INTER_AREA)
-    cv2.imwrite(os.path.join(path, filename),resized)
+    resized = cv2.resize(image,(300, 300), interpolation=cv2.INTER_AREA)
+    cv2.imwrite(os.path.join("E:\\project\\LicensePLate_resized", filename),resized)
