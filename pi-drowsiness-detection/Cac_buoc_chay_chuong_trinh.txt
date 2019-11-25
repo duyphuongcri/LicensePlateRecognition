@@ -1,0 +1,14 @@
+Buoc 1: Mo cua so Terminal (phim tat: ctrl + Alt + F4)
+Buoc 2: Copy dong lenh sau vao termial
+
+cd /home/pi/Desktop/pi-drowsiness-detection/dist
+./pi_detect_drowsiness --cascade haarcascade_frontalface_default.xml --shape-predictor shape_predictor_68_face_landmarks.dat --alarm 1
+
+Buoc 3: Chuong trinh se hoi co thiet lap thong so lai khong
+-Neu khong thi bam 0 roi Enter
+- Neu co thi bam 1 --> Enter
++ Thiet lap lai cac thong so theo cau hoi, cac so trong ngoac la cac so mac dinh
+
+Buoc 4: Nhin vao man hinh may tinh, dieu chinh vi tri ghe ngoi cho toi khi phat ra cau " Xin chao!..."
+
+Buoc 5: Khi muon dung chuong trinh thi bam q hoac Ctrl+z
