@@ -79,7 +79,7 @@ detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
 
 # Each score represents level of confidence for each of the objects.
 # The score is shown on the result image, together with the class label.
-detection_scores = detection_graph.get_tensor_by_name('detection_classes:0')
+detection_scores = detection_graph.get_tensor_by_name('detection_scores:0')
 
 detection_classes  = detection_graph.get_tensor_by_name('detection_classes:0')
 # Number of objects detected
@@ -88,8 +88,69 @@ num_detections = detection_graph.get_tensor_by_name('num_detections:0')
 # Load image using OpenCV and
 # expand image dimensions to have shape: [1, None, None, 3]
 # i.e. a single-column array, where each item in the column has the pixel RGB value
+
+
+##################
+def non_max_suppression(boxes, scores, threshold):	
+    assert boxes.shape[0] == scores.shape[0]
+    # bottom-left origin
+    ys1 = boxes[:, 0]
+    xs1 = boxes[:, 1]
+    # top-right target
+    ys2 = boxes[:, 2]
+    xs2 = boxes[:, 3]
+    # box coordinate ranges are inclusive-inclusive
+    areas = (ys2 - ys1) * (xs2 - xs1)
+    scores_indexes = scores.argsort().tolist()
+    boxes_keep_index = []
+    while len(scores_indexes):
+        index = scores_indexes.pop()
+        boxes_keep_index.append(index)
+        if not len(scores_indexes):
+            break
+        ious = compute_iou(boxes[index], boxes[scores_indexes], areas[index],
+                           areas[scores_indexes])
+        filtered_indexes = set((ious > threshold).nonzero()[0])
+        # if there are no more scores_index
+        # then we should pop it
+        scores_indexes = [
+            v for (i, v) in enumerate(scores_indexes)
+            if i not in filtered_indexes
+        ]
+    return np.array(boxes_keep_index)
+
+def compute_iou(box, boxes, box_area, boxes_area):
+    # this is the iou of the box against all other boxes
+    assert boxes.shape[0] == boxes_area.shape[0]
+    # get all the origin-ys
+    # push up all the lower origin-xs, while keeping the higher origin-xs
+    ys1 = np.maximum(box[0], boxes[:, 0])
+    # get all the origin-xs
+    # push right all the lower origin-xs, while keeping higher origin-xs
+    xs1 = np.maximum(box[1], boxes[:, 1])
+    # get all the target-ys
+    # pull down all the higher target-ys, while keeping lower origin-ys
+    ys2 = np.minimum(box[2], boxes[:, 2])
+    # get all the target-xs
+    # pull left all the higher target-xs, while keeping lower target-xs
+    xs2 = np.minimum(box[3], boxes[:, 3])
+    # each intersection area is calculated by the
+    # pulled target-x minus the pushed origin-x
+    # multiplying
+    # pulled target-y minus the pushed origin-y
+    # we ignore areas where the intersection side would be negative
+    # this is done by using maxing the side length by 0
+    intersections = np.maximum(ys2 - ys1, 0) * np.maximum(xs2 - xs1, 0)
+    # each union is then the box area
+    # added to each other box area minusing their intersection calculated above
+    unions = box_area + boxes_area - intersections
+    # element wise division
+    # if the intersection is 0, then their ratio is 0
+    ious = intersections / unions
+    return ious
+
 import time
-path = "E:\\project\\LicensePLate_resized"
+path = "E:\\project\\LicensePLate_resized\\test"
 files = [i for i in os.listdir(path) if i.endswith(".png")]
 n=0
 for filename in files:
@@ -106,17 +167,32 @@ for filename in files:
         feed_dict={image_tensor: image_expanded})
 
     # Draw the results of the detection (aka 'visulaize the results')
+    
+    # vis_util.visualize_boxes_and_labels_on_image_array(
+    #     image_ori,
+    #     np.squeeze(boxes),
+    #     np.squeeze(classes).astype(np.int32),
+    #     np.squeeze(scores),
+    #     category_index,
+    #     use_normalized_coordinates=True,
+    #     line_thickness=1,
+    #     min_score_thresh=0.90)
+    boxes[0][:,0] = boxes[0][:,0]*300
+    boxes[0][:,1] = boxes[0][:,1]*300
+    boxes[0][:,2] = boxes[0][:,2]*300
+    boxes[0][:,3] = boxes[0][:,3]*300
 
-    vis_util.visualize_boxes_and_labels_on_image_array(
-        image_ori,
-        np.squeeze(boxes),
-        np.squeeze(classes).astype(np.int32),
-        np.squeeze(scores),
-        category_index,
-        use_normalized_coordinates=True,
-        line_thickness=1,
-        min_score_thresh=0.60)
- 
+    #index = non_max_suppression(boxes[0][:int(num[0])],scores[0][:int(num[0])], 0.3)
+    n = 0
+    for i in range(len(boxes[0])):
+        y1, x1, y2, x2 = boxes[0][i][:]
+        h, w = y2 - y1, x2 - x1
+        if scores[0][i] > 0.2 and  h < 150 and w < 100:
+            cv2.rectangle(image_ori, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+            cv2.putText(image_ori, "{}".format(int(classes[0][i] - 1)), (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0),2)  
+            print(classes[0][i] - 1, scores[0][i])
+        else: 
+            break
     # All the results have been drawn on image. Now display the image.
     cv2.imshow("", image_ori) 
     if cv2.waitKey(0) == 27:

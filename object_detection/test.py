@@ -53,7 +53,7 @@ def detect_line(img):
 def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes):
     # All the results have been drawn on image. Now display the image.
     for i, box in enumerate(list_License_Plate_box):
-        if len(box) != 0 and list_real_plate_mode[i]:
+        if len(box) > 0 and list_real_plate_mode[i]:
             cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
             cv2.putText(image_ori, "Plate", (box[1], box[0]), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0),3)  
 
@@ -97,6 +97,10 @@ def detect_plate(input_image, list_License_Plate_box):
     list_real_plate_mode = []
     list_number_plates = []
     for i, box in enumerate(list_License_Plate_box):
+        if len(box) == 0:
+            list_real_plate_mode.append(False)
+            list_number_plates.append(False)
+            continue
         list_number = []
         image = input_image[box[0]: box[2], box[1]: box[3]]
         h_plate, w_plate = image.shape[:2]
@@ -109,8 +113,6 @@ def detect_plate(input_image, list_License_Plate_box):
             list_real_plate_mode.append(False)
             continue
 
-        fn = filename.replace(".png", "{}.png".format(i))
-        cv2.imwrite("")
         
         # Chuyển sang ảnh nhị phân ( ngưỡng = 150); > 150 => 255;   < 150 ==> 0
         # Ảnh nhị phân là ảnh trắng đen ( chỉ có 2 màu trắng và đen tương ứng giá trị 255 và 0)
@@ -232,9 +234,7 @@ def detect_License_Plate(list_region_plate,
     
     for i, image in enumerate(list_region_plate):
         img_resized = cv2.resize(image,(300,300))
-        # print(img_resized.shape)
-        # cv2.imshow("", img_resized)
-        # cv2.waitKey(0)
+
         image_expanded = np.expand_dims(img_resized, axis=0)
         # Perform the actual detection by running the model with the image as input
         (boxes, scores, classes, num) = sess.run(
@@ -243,6 +243,7 @@ def detect_License_Plate(list_region_plate,
 
         for j in range(1):
             if scores[0][j] > threshold_score:
+                print("Score of Plate: ", scores[0][j])
                 y1, x1, y2, x2 = int(boxes[0][j][0]*img_resized.shape[0]), int(boxes[0][j][1]*img_resized.shape[1]), int(boxes[0][j][2]*img_resized.shape[0]), int(boxes[0][j][3]*img_resized.shape[1])
                 ratio = image.shape[0] / img_resized.shape[0] 
                 y1_Plate_ori, x1_Plate_ori, y2_Plate_ori, x2_Plate_ori = int(y1*ratio + vehicle_boxes[i][0]), int(x1*ratio + vehicle_boxes[i][1]), int(y2*ratio + + vehicle_boxes[i][0]), int(x2*ratio + + vehicle_boxes[i][1])
@@ -311,8 +312,8 @@ categories_vehicle = label_map_util.convert_label_map_to_categories(label_map_ve
 category_index_vehicle = label_map_util.create_category_index(categories_vehicle)
 
 label_map_LicensePlate = label_map_util.load_labelmap(PATH_TO_LABELS_LicensePlate)
-categories_LicensePlatev = label_map_util.convert_label_map_to_categories(label_map_LicensePlate, max_num_classes=1, use_display_name=True)
-category_index_LicensePlate = label_map_util.create_category_index(categories_LicensePlatev)
+categories_LicensePlate = label_map_util.convert_label_map_to_categories(label_map_LicensePlate, max_num_classes=1, use_display_name=True)
+category_index_LicensePlate = label_map_util.create_category_index(categories_LicensePlate)
 
 # Load the Tensorflow model into memory.
 detection_graph_vehicle = tf.Graph()
@@ -347,7 +348,7 @@ detection_boxes_LicensePlate = detection_graph_LicensePlate.get_tensor_by_name('
 # Each score represents level of confidence for each of the objects.
 # The score is shown on the result image, together with the class label.
 detection_scores_vehicle = detection_graph_vehicle.get_tensor_by_name('detection_scores:0')
-detection_scores_LicensePlate = detection_graph_LicensePlate.get_tensor_by_name('detection_classes:0')
+detection_scores_LicensePlate = detection_graph_LicensePlate.get_tensor_by_name('detection_scores:0')
 
 detection_classes_vehicle = detection_graph_vehicle.get_tensor_by_name('detection_classes:0')
 detection_classes_LicensePlate  = detection_graph_LicensePlate .get_tensor_by_name('detection_classes:0')
@@ -402,7 +403,7 @@ if __name__=="__main__":
 
 
     path = "E:\\project\\data"
-    files = [i for i in os.listdir(path) if i.endswith("image05771.png")]
+    files = [i for i in os.listdir(path) if i.endswith(".png")]
     class_text = ["Background","motorbike", "car"]
     first_frame = True
     for filename in files:
@@ -427,13 +428,6 @@ if __name__=="__main__":
         #list_region_plate, list_x1_region, list_mode_crop = crop_plate_region(image_ori, vehicle_boxes, classID)
         list_region_plate = crop_plate_region(image_ori, vehicle_boxes, classID)
 
-        # for i, image in enumerate(list_region_plate):
-        #     print(image.shape)
-        #     image = cv2.resize(image, (300,300))
-        #     print(image.shape)
-        #     fn = filename.replace(".png", "{}.png".format(i))
-        #     cv2.imwrite("E:\\project\\data_LicensePlate\\"+ fn, image)
-
         list_License_Plate_box = detect_License_Plate(list_region_plate, 
                                                         vehicle_boxes,
                                                         sess_LicensePlate, 
@@ -442,14 +436,11 @@ if __name__=="__main__":
                                                         detection_classes_LicensePlate, 
                                                         num_detections_LicensePlate, 
                                                         image_tensor_LicensePlate,
-                                                        threshold_score=0.5)   
+                                                        threshold_score=0.003)   
 
         list_real_plate_mode, list_number_plates = detect_plate(image_ori, list_License_Plate_box)
         print(list_number_plates)
-        # for i, box in enumerate(list_License_Plate_box):
-        #     image = image_ori[box[0]: box[2], box[1]: box[3]]
-        #     fn = filename.replace(".png", "{}.png".format(i))
-        #     cv2.imwrite("E:\\project\\LicensePlate\\"+ fn, image)
+
 
         image_ori = visualize_image(image_ori, list_License_Plate_box, vehicle_boxes)
         cv2.imshow("", image_ori) 
