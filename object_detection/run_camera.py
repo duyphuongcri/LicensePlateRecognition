@@ -152,18 +152,17 @@ def recognize_plate(input_image,
                 if w_plate / h_plate < 2: # plate with 2 lines
                     # List down number and letter at thr bottom of plate
                     if h_plate * 0.8 > y1_ori > h_plate * 0.3: #and h > w and h_plate / 2.8 > h > h_plate / 5:
-                        list_number.append(int(classes[0][idx] - 1))
+                        list_number.append(x1_ori, [int(classes[0][idx] - 1)]) # append coordinate of x_min and number letter
                         cv2.rectangle(image_resized, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
                         cv2.putText(image_resized, "{}".format(int(classes[0][idx] - 1)), (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0),2)  
                         print(classes[0][idx] - 1, scores[0][idx])
                 elif h >= h_plate / 2 and h > w: # plate with 1 line only
                     list_number.append(int(classes[0][idx] - 1))
 
+        list_number = sorted(list_number, key= lamda x: int(x[0]))
         list_number_plates.append(list_number)
         cv2.imshow("ad", image_resized)
         
-
-
     return list_real_plate_mode, list_number_plates
 
 def crop_plate_region(input_image, vehicle_boxes, classID):
@@ -383,8 +382,9 @@ if __name__=="__main__":
     class_text = ["Background","motorbike", "car"]
     first_frame = True
     flag_red_light = False
-
-    #
+    number_plate = ""
+    
+    #################################
     path = "E:\\project\\data_test2"
     files = [i for i in os.listdir(path) if i.endswith(".png")]
     stt = 0
@@ -404,11 +404,11 @@ if __name__=="__main__":
         
 
         image_ori = cv2.imread(os.path.join(path, files[stt]))
+        # detect line
         if first_frame:
             slope, intercept = detect_line(image_ori)
             first_frame = False
-        if image_ori is None:
-            continue
+
         vehicle_boxes, classID = detect_vehicle(image_ori, 
                                                 sess_vehicle, 
                                                 detection_boxes_vehicle, 
@@ -418,10 +418,11 @@ if __name__=="__main__":
                                                 image_tensor_vehicle,
                                                 threshold_score=0.8)
 
-        # ## Crop region of interest of License Plate to pass another model which is used to detect License Plate 
-        #list_region_plate, list_x1_region, list_mode_crop = crop_plate_region(image_ori, vehicle_boxes, classID)
-        list_region_plate = crop_plate_region(image_ori, vehicle_boxes, classID)
+        if len(vehicle_boxes) == 0: # Dont have any vehicle
+            continue
 
+        # ## Crop region of interest of License Plate to pass another model which is used to detect License Plate 
+        list_region_plate = crop_plate_region(image_ori, vehicle_boxes, classID)
         list_License_Plate_box = detect_License_Plate(list_region_plate, 
                                                         vehicle_boxes,
                                                         sess_LicensePlate, 
@@ -431,7 +432,7 @@ if __name__=="__main__":
                                                         num_detections_LicensePlate, 
                                                         image_tensor_LicensePlate,
                                                         threshold_score=0.003)   
-        print(list_License_Plate_box)
+
         list_real_plate_mode, list_number_plates = recognize_plate(image_ori, 
                                                                 list_License_Plate_box,
                                                                 sess_NumberLetter,
@@ -442,8 +443,9 @@ if __name__=="__main__":
                                                                 image_tensor_NumberLetter,
                                                                 threshold_score=0.2)
 
- 
+        print(list_number_plates)
         image_ori = visualize_image(image_ori, list_License_Plate_box, vehicle_boxes)
+
         cv2.imshow("", image_ori) 
         if cv2.waitKey(0) == 27:
             break

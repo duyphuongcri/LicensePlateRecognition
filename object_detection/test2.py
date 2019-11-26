@@ -30,6 +30,68 @@ from utils import visualization_utils as vis_util
 import time
 import argparse
 from datetime import datetime
+import serial
+import pandas as pd
+
+
+##################
+def non_max_suppression(boxes, scores, threshold):	
+    assert boxes.shape[0] == scores.shape[0]
+    # bottom-left origin
+    ys1 = boxes[:, 0]
+    xs1 = boxes[:, 1]
+    # top-right target
+    ys2 = boxes[:, 2]
+    xs2 = boxes[:, 3]
+    # box coordinate ranges are inclusive-inclusive
+    areas = (ys2 - ys1) * (xs2 - xs1)
+    scores_indexes = scores.argsort().tolist()
+    boxes_keep_index = []
+    while len(scores_indexes):
+        index = scores_indexes.pop()
+        boxes_keep_index.append(index)
+        if not len(scores_indexes):
+            break
+        ious = compute_iou(boxes[index], boxes[scores_indexes], areas[index],
+                           areas[scores_indexes])
+        filtered_indexes = set((ious > threshold).nonzero()[0])
+        # if there are no more scores_index
+        # then we should pop it
+        scores_indexes = [
+            v for (i, v) in enumerate(scores_indexes)
+            if i not in filtered_indexes
+        ]
+    return np.array(boxes_keep_index)
+
+def compute_iou(box, boxes, box_area, boxes_area):
+    # this is the iou of the box against all other boxes
+    assert boxes.shape[0] == boxes_area.shape[0]
+    # get all the origin-ys
+    # push up all the lower origin-xs, while keeping the higher origin-xs
+    ys1 = np.maximum(box[0], boxes[:, 0])
+    # get all the origin-xs
+    # push right all the lower origin-xs, while keeping higher origin-xs
+    xs1 = np.maximum(box[1], boxes[:, 1])
+    # get all the target-ys
+    # pull down all the higher target-ys, while keeping lower origin-ys
+    ys2 = np.minimum(box[2], boxes[:, 2])
+    # get all the target-xs
+    # pull left all the higher target-xs, while keeping lower target-xs
+    xs2 = np.minimum(box[3], boxes[:, 3])
+    # each intersection area is calculated by the
+    # pulled target-x minus the pushed origin-x
+    # multiplying
+    # pulled target-y minus the pushed origin-y
+    # we ignore areas where the intersection side would be negative
+    # this is done by using maxing the side length by 0
+    intersections = np.maximum(ys2 - ys1, 0) * np.maximum(xs2 - xs1, 0)
+    # each union is then the box area
+    # added to each other box area minusing their intersection calculated above
+    unions = box_area + boxes_area - intersections
+    # element wise division
+    # if the intersection is 0, then their ratio is 0
+    ious = intersections / unions
+    return ious
 
 def detect_line(img):
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -50,22 +112,27 @@ def detect_line(img):
             #cv2.line(img, (x1, y1), ( x2, y2), (0,255,0), 5 )
     return slope, intercept
 
-def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes):
+def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes, list_full_number_plates):
     # All the results have been drawn on image. Now display the image.
     for i, box in enumerate(list_License_Plate_box):
         if len(box) > 0 and list_real_plate_mode[i]:
             cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
-            cv2.putText(image_ori, "Plate", (box[1], box[0]), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0),3)  
-
+            cv2.putText(image_ori, "Plate", (box[1], box[0] ), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0),1)  
+        if len(list_full_number_plates[i]) > 0:
+            cv2.putText(image_ori, list_full_number_plates[i] , (box[1], box[2]+ 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),2)  
     for i,box in enumerate(vehicle_boxes):
         cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
         cv2.putText(image_ori, str(class_text[classID[i]]), (box[1], box[0] + 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0),3)
+
+
 
     # Visualize date time
     now = datetime.now()
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
     cv2.putText(image_ori, dt_string, (5, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255),1)
-    print(dt_string)
+
+    # display location
+    cv2.putText(image_ori, """10*14'09.9"N 106*22'20.6"E""", (180, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255),1) 
 
     return image_ori
 
@@ -137,13 +204,19 @@ def recognize_plate(input_image,
         (boxes, scores, classes, num) = sess.run(
             [detection_boxes, detection_scores, detection_classes, num_detections],
             feed_dict={image_tensor: image_expanded})
-
-
-
+        n_box = 9
+        boxes[0][:,0] = boxes[0][:,0]*image_resized.shape[0]
+        boxes[0][:,1] = boxes[0][:,1]*image_resized.shape[1]
+        boxes[0][:,2] = boxes[0][:,2]*image_resized.shape[0]
+        boxes[0][:,3] = boxes[0][:,3]*image_resized.shape[1]
+        # perform non-maximum suppression on the bounding boxes
+        index = non_max_suppression(boxes[0][0:n_box],scores[0][0:n_box], 0.3)
+        print("list index: ", index)
         ratio = h_plate / image_resized.shape[0] 
-        print("ratio: ", ratio)
-        for idx in range(10):
-            y1, x1, y2, x2 = boxes[0][idx][:]*image_resized.shape[0]       
+        for idx in range(9):
+            if idx not in index:
+                continue
+            y1, x1, y2, x2 = boxes[0][idx][:]    
             y1_ori, x1_ori, y2_ori, x2_ori = int(y1*ratio), int(x1*ratio), int(y2*ratio), int(x2*ratio)
             h, w = y2_ori - y1_ori, x2_ori - x1_ori
             if scores[0][idx] > threshold_score:
@@ -151,14 +224,16 @@ def recognize_plate(input_image,
                 if w_plate / h_plate < 2: # plate with 2 lines
                     # List down number and letter at thr bottom of plate
                     if h_plate * 0.8 > y1_ori > h_plate * 0.3: #and h > w and h_plate / 2.8 > h > h_plate / 5:
-                        list_number.append(int(classes[0][idx] - 1))
+                        list_number.append([x1_ori, int(classes[0][idx] - 1)])
                         cv2.rectangle(image_resized, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
                         cv2.putText(image_resized, "{}".format(int(classes[0][idx] - 1)), (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0),2)  
                         print(classes[0][idx] - 1, scores[0][idx])
                 elif h >= h_plate / 2 and h > w: # plate with 1 line only
                     list_number.append(int(classes[0][idx] - 1))
 
-        list_number_plates.append(list_number)
+        list_number = sorted(list_number, key= lambda x: int(x[0]))
+        numbers = [number for x, number in list_number]
+        list_number_plates.append(numbers)
         cv2.imshow("ad", image_resized)
         
 
@@ -341,7 +416,62 @@ num_detections_vehicle = detection_graph_vehicle.get_tensor_by_name('num_detecti
 num_detections_LicensePlate = detection_graph_LicensePlate.get_tensor_by_name('num_detections:0')
 num_detections_NumberLetter = detection_graph_NumberLetter.get_tensor_by_name('num_detections:0')
 
+############## Set up connection between laptop and Arduino ############################
+try:                                                                                   # 
+    arduino_lighttraffic = serial.Serial("COM3", 9600 ,timeout=1)                      # 
+    arduino_moduleSim = serial.Serial("COM5", 9600 ,timeout=1)                         # 
+    print("Found out Arduino Uno device")                                              #
+except:                                                                                #
+    print("Please checl the port")                                                     #
+########################################################################################
 
+########### LOAD EXCEL FILE ############################################################
+csv_sumary_path = "E:\\LicensePlateRecognition\\Autofill_Sumary\\Information_License_plate.xlsx"
+data = pd.read_excel(csv_sumary_path, converters={'Biển số phần 2':str, 'Biển số phần 1':str})
+# Duyet 1 cot
+num_plates_excel = list(data["Biển số phần 2"])
+num_plates_1 = list(data["Biển số phần 1"])
+
+def check_number_plate(list_number_plates, num_plates_excel, num_plates_1):
+    list_index_excel = []
+    list_full_number_plates = []
+    for num_plate_predict in list_number_plates:
+        flag_matching = False
+        if num_plate_predict == False:
+            list_index_excel.append(None)
+            list_full_number_plates.append([])
+            continue
+        num_plate_predict = ''.join(map(str, num_plate_predict))
+        print(num_plate_predict)
+        if len(num_plate_predict) == 5:
+            if num_plate_predict in num_plates_excel:
+                    #print(num_plates_excel.index(num_plate_predict))
+                    print("100%")
+                    flag_matching = True 
+                    index_excel = num_plates_excel.index(num_plate_predict)
+            else:
+                for num_plate in num_plates_excel:
+                    for i in range(5):
+                        if num_plate.replace(num_plate[i], '') == num_plate_predict.replace(num_plate_predict[i], ''):
+                            print("80%")   
+                            flag_matching = True      
+                            index_excel = num_plates_excel.index(num_plate)   
+
+        elif len(num_plate_predict) == 4: 
+            for num_plate in num_plates_excel:
+                for i in range(5):
+                    if num_plate.replace(num_plate[i],'') == num_plate_predict:
+                        print("80%")  
+                        flag_matching = True 
+                        index_excel = num_plates_excel.index(num_plate)
+
+        if flag_matching:
+            list_index_excel.append(index_excel)
+            list_full_number_plates.append(num_plates_1[index_excel] + num_plates_excel[index_excel])
+        else:
+            list_index_excel.append(None)
+            list_full_number_plates.append([])
+    return  list_index_excel, list_full_number_plates
 if __name__=="__main__":
     # Parse command line arguments
     # parser = argparse.ArgumentParser(
@@ -386,7 +516,6 @@ if __name__=="__main__":
                                                 num_detections_vehicle, 
                                                 image_tensor_vehicle,
                                                 threshold_score=0.8)
-
         # ## Crop region of interest of License Plate to pass another model which is used to detect License Plate 
         #list_region_plate, list_x1_region, list_mode_crop = crop_plate_region(image_ori, vehicle_boxes, classID)
         list_region_plate = crop_plate_region(image_ori, vehicle_boxes, classID)
@@ -400,7 +529,6 @@ if __name__=="__main__":
                                                         num_detections_LicensePlate, 
                                                         image_tensor_LicensePlate,
                                                         threshold_score=0.003)   
-        print(list_License_Plate_box)
         list_real_plate_mode, list_number_plates = recognize_plate(image_ori, 
                                                                 list_License_Plate_box,
                                                                 sess_NumberLetter,
@@ -411,8 +539,10 @@ if __name__=="__main__":
                                                                 image_tensor_NumberLetter,
                                                                 threshold_score=0.2)
 
- 
-        image_ori = visualize_image(image_ori, list_License_Plate_box, vehicle_boxes)
+        list_index_excel, list_full_number_plates = check_number_plate(list_number_plates, num_plates_excel, num_plates_1)
+
+        print(list_full_number_plates)
+        image_ori = visualize_image(image_ori, list_License_Plate_box, vehicle_boxes, list_full_number_plates)
         cv2.imshow("", image_ori) 
         if cv2.waitKey(0) == 27:
             break
