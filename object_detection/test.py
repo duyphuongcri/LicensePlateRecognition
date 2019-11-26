@@ -65,6 +65,7 @@ def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes):
     now = datetime.now()
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
     cv2.putText(image_ori, dt_string, (5, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255),1)
+    print(dt_string)
 
     return image_ori
 
