@@ -27,7 +27,13 @@ from datetime import datetime
 import serial
 import pandas as pd
 
-
+##################
+import pygame
+pygame.mixer.init()
+def vuot_den_do_audio():
+    if not pygame.mixer.music.get_busy():
+        pygame.mixer.music.load('E:\\LicensePlateRecognition\\audio\\a.mp3')
+        pygame.mixer.music.play()
 ##################
 def non_max_suppression(boxes, scores, threshold):	
     assert boxes.shape[0] == scores.shape[0]
@@ -612,11 +618,13 @@ if __name__=="__main__":
                                     mask_line)
         print("index: ",list_index_plate_excel_detected)
         if flag_red_light and True in list_traffic_violation_mode:
-            send_message_arduino(arduino_moduleSim, list_index_plate_excel_detected)
+            vuot_den_do_audio()
+            #send_message_arduino(arduino_moduleSim, list_index_plate_excel_detected)
+
             list_index_plate_excel_detected = []
         if not flag_red_light:
             list_index_plate_excel_detected = []
-            ##export_record_violation()
+       
         #cv2.imwrite("E:\\project\\result\\"+ filename, image_ori)
         cv2.imshow("", image_ori) 
         if cv2.waitKey(0) == 27:
