@@ -355,21 +355,26 @@ def detect_vehicle(input_image, sess, detection_boxes, detection_scores, detecti
 
 def send_message_arduino(arduino_moduleSim, list_index_excel):
     now = datetime.now()
-    thoigian = now.strftime("%H:%M:%S%d/%m/%Y")
+    thoigian = now.strftime("%H:%M:%S %d/%m/%Y")
     for idx in list_index_excel:
         if idx is None:
             continue
         message = "warning:" + list_number_phones[idx] + thoigian + list_num_plates_1[idx] + list_num_plates_excel[idx]
+        print("Message: ", message)
         arduino_moduleSim.write(message.encode())
         print("-Sent data to Arduino-")
+        time.sleep(0.1)
+        for i in range(10):
+            data = arduino_moduleSim.readline()
+            data = data.decode("utf-8").rstrip('\r\n') 
+            print(data)
         # while True:
         #     print(" data received: ",arduino_moduleSim.readline().decode("utf-8"))
 
 # Grab path to current working directory
 CWD_PATH = os.getcwd()
 
-# Path to frozen detection graph .pb file, which contains the model that is used
-# for object detection.
+# Path to frozen detection graph .pb file, which contains the model that is used for object detection.
 PATH_TO_CKPT_vehicle = os.path.join(CWD_PATH,"Vehicle_ssd",'frozen_inference_graph.pb')
 PATH_TO_CKPT_LicensePlate = os.path.join(CWD_PATH,"License_PLate",'frozen_inference_graph.pb')
 PATH_TO_CKPT_NumberLetter = os.path.join(CWD_PATH,"NumberLetter",'frozen_inference_graph.pb')
@@ -381,10 +386,6 @@ PATH_TO_LABELS_NumberLetter = os.path.join(CWD_PATH,'training','labelmap_NumberL
 
 
 # Load the label map.
-# Label maps map indices to category names, so that when our convolution
-# network predicts `5`, we know that this corresponds to `king`.
-# Here we use internal utility functions, but anything that returns a
-# dictionary mapping integers to appropriate string labels would be fine
 label_map_vehicle = label_map_util.load_labelmap(PATH_TO_LABELS_vehicle)
 categories_vehicle = label_map_util.convert_label_map_to_categories(label_map_vehicle, max_num_classes=2, use_display_name=True)
 category_index_vehicle = label_map_util.create_category_index(categories_vehicle)
@@ -454,8 +455,8 @@ num_detections_NumberLetter = detection_graph_NumberLetter.get_tensor_by_name('n
 
 ############## Set up connection between laptop and Arduino ############################
 try:                                                                                   # 
-    #arduino_lighttraffic = serial.Serial("COM3", 9600 ,timeout=1)                      # 
-    arduino_moduleSim = serial.Serial("COM6", 9600 ,timeout=1)                         # 
+    arduino_lighttraffic = serial.Serial("COM3", 9600 ,timeout=1)                      # 
+    arduino_moduleSim = serial.Serial("COM6", 115200 ,timeout=1)                         # 
     print("Found out Arduino Uno device")                                              #
 except:                                                                                #
     print("Please checl the port")                                                     #
@@ -542,11 +543,23 @@ if __name__=="__main__":
     # Will reset when that vehicle pass red light or traffic light sign switch to green light.
     list_index_plate_excel_detected = []
     flag_red_light = True
-    path = "E:\\project\\data_test4"
+    path = "E:\\project\\data_test2"
     files = [i for i in os.listdir(path) if i.endswith(".png")]
     class_text = ["Background","motorbike", "car"]
     first_frame = True
     for filename in files:
+
+        # time.sleep(0.5)
+        # for i in range(5):
+        #     data_light_traffic = arduino_lighttraffic.readline()
+        #     data_light_traffic = data_light_traffic.decode("utf-8").rstrip('\r\n') 
+        #     if data_light_traffic == "0": # red light
+        #         print("Red mode")
+        #         flag_red_light = True
+        #     if data_light_traffic == "1":
+        #         print("Green mode")
+        #         flag_red_light = False
+
         start = time.time()
         print(filename)
         image_ori = cv2.imread(os.path.join(path, filename))
