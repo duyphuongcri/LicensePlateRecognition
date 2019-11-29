@@ -109,9 +109,9 @@ def check_pass_red_light(vehicle_boxes, slope, intercept):
     return list_traffic_violation_mode
 
 def detect_line(img):
+
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     ret, img_bw = cv2.threshold(img_gray, 200, 255, cv2.THRESH_BINARY)
-
     lines = cv2.HoughLinesP(img_bw, rho=1, theta=np.pi/180, threshold=150, minLineLength=10, maxLineGap=30)
     #print(lines[0])
     for line in lines:
@@ -140,8 +140,7 @@ def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes, list_full_
     image_ori[:, :, 1] = np.where(mask == 255 ,91, image_ori[:, :, 1])
     image_ori[:, :, 2] = np.where(mask == 255 ,210, image_ori[:, :, 2])
  
-
-    # draw vehicles
+    # # draw vehicles
     for i,box in enumerate(vehicle_boxes):
         if list_traffic_violation_mode[i]:
             cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
@@ -151,7 +150,7 @@ def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes, list_full_
         if list_traffic_violation_mode[i] and flag_red_light:
             image_ori[box[0]: box[2], box[1]: box[3], 2] = 250
 
-    # Draw license plate
+    # # # # # Draw license plate
     for i, box in enumerate(list_License_Plate_box):
         if len(box) == 0:
             continue
@@ -161,23 +160,23 @@ def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes, list_full_
         if len(list_full_number_plates) > 0:
             cv2.putText(image_ori, list_full_number_plates[0] , (box[1], box[2]+ 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 50, 50),2) 
 
-    # Visualize date time
+    # # Visualize date time
     now = datetime.now()
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-    cv2.putText(image_ori, dt_string, (5, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0),1)
+    cv2.putText(image_ori, dt_string, (5, 460), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0),2)
 
     # display location
-    cv2.putText(image_ori, """10*14'09.9"N 106*22'20.6"E""", (180, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0),1) 
+    cv2.putText(image_ori, """Location: 10*14'09.9"N 106*22'20.6"E""", (5, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0),2) 
 
     # display traffic light mode
-    cv2.putText(image_ori, "Traffic Light Status: ", (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0),2) 
+    cv2.putText(image_ori, "Traffic Light Status: ", (5, 440), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0),2) 
     if flag_red_light:
-        cv2.circle(image_ori, (210,15), 13, (0,0,255), -1)
+        cv2.circle(image_ori, (210,435), 13, (0,0,255), -1)
         # pass red light or not
         if True in list_traffic_violation_mode:
             cv2.putText(image_ori, "Traffic Violation", (450, 470), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255),2) 
     else:
-        cv2.circle(image_ori, (210,15), 13, (0,255,0), -1)
+        cv2.circle(image_ori, (210,435), 13, (0,255,0), -1)
     
 
     return image_ori
@@ -473,10 +472,10 @@ num_detections_NumberLetter = detection_graph_NumberLetter.get_tensor_by_name('n
 ############## Set up connection between laptop and Arduino ############################
 try:                                                                                   # 
     arduino_lighttraffic = serial.Serial("COM3", 9600 ,timeout=1)                      # 
-    arduino_moduleSim = serial.Serial("COM6", 115200 ,timeout=1)                         # 
+    arduino_moduleSim = serial.Serial("COM6", 115200 ,timeout=1)                       #    
     print("Found out Arduino Uno device")                                              #
 except:                                                                                #
-    print("Please checl the port")                                                     #
+    print("Please check the port")                                                     #
 ########################################################################################
 
 ########### LOAD EXCEL FILE #####################################################################
@@ -562,7 +561,7 @@ if __name__=="__main__":
     list_full_number_plates = []
     flag_red_light = True
     path = "E:\\project\\data_test4"
-    files = [i for i in os.listdir(path) if i.endswith(".jpg")]
+    files = [i for i in os.listdir(path) if i.endswith(".png") ]
     class_text = ["Background","motorbike", "car"]
     first_frame = True
     for filename in files:
@@ -638,7 +637,7 @@ if __name__=="__main__":
             list_index_plate_excel_detected = []
             #list_full_number_plates = []
        
-        #cv2.imwrite("E:\\project\\result\\"+ filename, image_ori)
+        cv2.imwrite("E:\\project\\result\\"+ filename, image_ori)
         cv2.imshow("", image_ori) 
         if cv2.waitKey(0) == 27:
             break
