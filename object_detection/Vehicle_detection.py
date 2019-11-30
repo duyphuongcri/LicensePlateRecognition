@@ -27,7 +27,13 @@ from datetime import datetime
 import serial
 import pandas as pd
 
-
+##################
+import pygame
+pygame.mixer.init()
+def vuot_den_do_audio():
+    if not pygame.mixer.music.get_busy():
+        pygame.mixer.music.load('E:\\LicensePlateRecognition\\audio\\a.mp3')
+        pygame.mixer.music.play()
 ##################
 def non_max_suppression(boxes, scores, threshold):	
     assert boxes.shape[0] == scores.shape[0]
@@ -103,9 +109,9 @@ def check_pass_red_light(vehicle_boxes, slope, intercept):
     return list_traffic_violation_mode
 
 def detect_line(img):
+
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     ret, img_bw = cv2.threshold(img_gray, 200, 255, cv2.THRESH_BINARY)
-
     lines = cv2.HoughLinesP(img_bw, rho=1, theta=np.pi/180, threshold=150, minLineLength=10, maxLineGap=30)
     #print(lines[0])
     for line in lines:
@@ -126,43 +132,53 @@ def detect_line(img):
     return slope, intercept, mask
 
 def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes, list_full_number_plates, flag_red_light, list_traffic_violation_mode, mask_line):
-    # All the results have been drawn on image. Now display the image.
-    for i, box in enumerate(list_License_Plate_box):
-        if len(box) > 0 and list_real_plate_mode[i]:
-            cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
-            cv2.putText(image_ori, "Plate", (box[1], box[0] - 5 ), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),2)  
-        if len(list_full_number_plates[i]) > 0:
-            cv2.putText(image_ori, list_full_number_plates[i] , (box[1], box[2]+ 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0),2)  
-    for i,box in enumerate(vehicle_boxes):
-        cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
-        cv2.putText(image_ori, str(class_text[classID[i]]), (box[1], box[2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0),2)
-        if list_traffic_violation_mode[i] and flag_red_light:
-            image_ori[box[0]: box[2], box[1]: box[3], 2] = 255
-
-
-    # Visualize date time
-    now = datetime.now()
-    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-    cv2.putText(image_ori, dt_string, (5, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0),1)
-
-    # display location
-    cv2.putText(image_ori, """10*14'09.9"N 106*22'20.6"E""", (180, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0),1) 
-
-    # display traffic light mode
-    cv2.putText(image_ori, "Traffic Light Status: ", (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0),2) 
-    if flag_red_light:
-        cv2.circle(image_ori, (210,15), 13, (0,0,255), -1)
-        # pass red light or not
-        if True in list_traffic_violation_mode:
-            cv2.putText(image_ori, "Traffic Violation", (450, 470), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255),2) 
-    else:
-        cv2.circle(image_ori, (210,15), 13, (0,255,0), -1)
     
     # draw mask of line
     ret, img_bw_150 = cv2.threshold(cv2.cvtColor(image_ori, cv2.COLOR_BGR2GRAY), 120, 255, cv2.THRESH_BINARY)
     mask = cv2.bitwise_and(mask_line, img_bw_150)
-    image_ori[:, :, 0] = np.where(mask == 255 ,255, image_ori[:, :, 0])
-    image_ori[:, :, 1] = np.where(mask == 255 ,0, image_ori[:, :, 1])
+    image_ori[:, :, 0] = np.where(mask == 255 ,100, image_ori[:, :, 0])
+    image_ori[:, :, 1] = np.where(mask == 255 ,91, image_ori[:, :, 1])
+    image_ori[:, :, 2] = np.where(mask == 255 ,210, image_ori[:, :, 2])
+ 
+    # # draw vehicles
+    for i,box in enumerate(vehicle_boxes):
+        if list_traffic_violation_mode[i]:
+            cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
+        else:
+            cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,255,0), 2)
+        cv2.putText(image_ori, str(class_text[classID[i]]), (box[1], box[2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0),2)
+        if list_traffic_violation_mode[i] and flag_red_light:
+            image_ori[box[0]: box[2], box[1]: box[3], 2] = 250
+
+    # # # # # Draw license plate
+    for i, box in enumerate(list_License_Plate_box):
+        if len(box) == 0:
+            continue
+        if list_real_plate_mode[i]:
+            cv2.putText(image_ori, "Plate", (box[1], box[0] - 5 ), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),2)  
+            cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,255,0), 2)   
+        if len(list_full_number_plates) > 0:
+            cv2.putText(image_ori, list_full_number_plates[0] , (box[1], box[2]+ 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 50, 50),2) 
+
+    # # Visualize date time
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+    cv2.putText(image_ori, dt_string, (5, 460), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0),2)
+
+    # display location
+    cv2.putText(image_ori, """Location: 10*14'09.9"N 106*22'20.6"E""", (5, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0),2) 
+
+    # display traffic light mode
+    cv2.putText(image_ori, "Traffic Light Status: ", (5, 440), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0),2) 
+    if flag_red_light:
+        cv2.circle(image_ori, (210,435), 13, (0,0,255), -1)
+        # pass red light or not
+        if True in list_traffic_violation_mode:
+            cv2.putText(image_ori, "Traffic Violation", (450, 470), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255),2) 
+    else:
+        cv2.circle(image_ori, (210,435), 13, (0,255,0), -1)
+    
+
     return image_ori
 
 def rotate_bound(image, angle):
@@ -456,10 +472,10 @@ num_detections_NumberLetter = detection_graph_NumberLetter.get_tensor_by_name('n
 ############## Set up connection between laptop and Arduino ############################
 try:                                                                                   # 
     arduino_lighttraffic = serial.Serial("COM3", 9600 ,timeout=1)                      # 
-    arduino_moduleSim = serial.Serial("COM6", 115200 ,timeout=1)                         # 
+    arduino_moduleSim = serial.Serial("COM6", 115200 ,timeout=1)                       #    
     print("Found out Arduino Uno device")                                              #
 except:                                                                                #
-    print("Please checl the port")                                                     #
+    print("Please check the port")                                                     #
 ########################################################################################
 
 ########### LOAD EXCEL FILE #####################################################################
@@ -471,12 +487,12 @@ list_num_plates_1 = list(data["Biển số phần 1"])
 list_number_phones = list(data["Số điện thoại"])
 
 ##################################################################################################
-def check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected):
-    list_full_number_plates = []
+def check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected, list_full_number_plates):
+    #list_full_number_plates = []
     for num_plate_predict in list_number_plates:
         flag_matching = False
         if num_plate_predict == False:
-            list_full_number_plates.append([])
+            #list_full_number_plates.append([])
             continue
         num_plate_predict = ''.join(map(str, num_plate_predict))
         if len(num_plate_predict) == 5:
@@ -512,8 +528,8 @@ def check_number_plate(list_number_plates, list_num_plates_excel, list_num_plate
         if flag_matching and index_excel not in list_index_plate_excel_detected:
             list_index_plate_excel_detected.append(index_excel)
             list_full_number_plates.append(list_num_plates_1[index_excel] + list_num_plates_excel[index_excel])
-        else:
-            list_full_number_plates.append([])
+        # else:
+        #     list_full_number_plates.append([])
     return  list_index_plate_excel_detected, list_full_number_plates
 
 if __name__=="__main__":
@@ -542,9 +558,10 @@ if __name__=="__main__":
     # list_index_plate_excel_detected: Contain index of the detected License Plate in excel file. 
     # Will reset when that vehicle pass red light or traffic light sign switch to green light.
     list_index_plate_excel_detected = []
+    list_full_number_plates = []
     flag_red_light = True
-    path = "E:\\project\\data_test2"
-    files = [i for i in os.listdir(path) if i.endswith(".png")]
+    path = "E:\\project\\data_test4"
+    files = [i for i in os.listdir(path) if i.endswith(".png") ]
     class_text = ["Background","motorbike", "car"]
     first_frame = True
     for filename in files:
@@ -600,8 +617,8 @@ if __name__=="__main__":
                                                                 image_tensor_NumberLetter,
                                                                 threshold_score=0.2)
 
-        list_index_plate_excel_detected, list_full_number_plates = check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected)
-
+        list_index_plate_excel_detected, list_full_number_plates = check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected, list_full_number_plates)
+        print(list_full_number_plates)
         list_traffic_violation_mode = check_pass_red_light(vehicle_boxes, slope, intercept)
 
         image_ori = visualize_image(image_ori, list_License_Plate_box, 
@@ -612,12 +629,15 @@ if __name__=="__main__":
                                     mask_line)
         print("index: ",list_index_plate_excel_detected)
         if flag_red_light and True in list_traffic_violation_mode:
-            send_message_arduino(arduino_moduleSim, list_index_plate_excel_detected)
+            vuot_den_do_audio()
+            #send_message_arduino(arduino_moduleSim, list_index_plate_excel_detected)
+            list_full_number_plates = []
             list_index_plate_excel_detected = []
         if not flag_red_light:
             list_index_plate_excel_detected = []
-            ##export_record_violation()
-        #cv2.imwrite("E:\\project\\result\\"+ filename, image_ori)
+            #list_full_number_plates = []
+       
+        cv2.imwrite("E:\\project\\result\\"+ filename, image_ori)
         cv2.imshow("", image_ori) 
         if cv2.waitKey(0) == 27:
             break
