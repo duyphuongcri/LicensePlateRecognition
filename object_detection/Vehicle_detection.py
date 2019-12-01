@@ -26,7 +26,8 @@ import argparse
 from datetime import datetime
 import serial
 import pandas as pd
-
+import mailmerge
+import xlrd
 ##################
 import pygame
 pygame.mixer.init()
@@ -637,7 +638,7 @@ if __name__=="__main__":
             list_index_plate_excel_detected = []
             #list_full_number_plates = []
        
-        cv2.imwrite("E:\\project\\result\\"+ filename, image_ori)
+        #cv2.imwrite("E:\\project\\result\\"+ filename, image_ori)
         cv2.imshow("", image_ori) 
         if cv2.waitKey(0) == 27:
             break

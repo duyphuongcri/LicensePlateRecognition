@@ -2,6 +2,7 @@
 #
 # Author: Duy-Phuong Dao
 # E-mail: duypphuongcri@gmail.com
+#############################################################################
 
 # Import packages
 from __future__ import print_function
@@ -26,7 +27,13 @@ from datetime import datetime
 import serial
 import pandas as pd
 
-
+##################
+import pygame
+pygame.mixer.init()
+def vuot_den_do_audio():
+    if not pygame.mixer.music.get_busy():
+        pygame.mixer.music.load('E:\\LicensePlateRecognition\\audio\\a.mp3')
+        pygame.mixer.music.play()
 ##################
 def non_max_suppression(boxes, scores, threshold):	
     assert boxes.shape[0] == scores.shape[0]
@@ -96,75 +103,87 @@ def check_pass_red_light(vehicle_boxes, slope, intercept):
         coor_x = box[1] + w * 0.8
         coor_y = box[0] + h * 0.6
         if slope * coor_x + intercept - coor_y > 0:
-            print("Vuot den do")
             list_traffic_violation_mode.append(True)
         else:
             list_traffic_violation_mode.append(False)
     return list_traffic_violation_mode
 
 def detect_line(img):
+    
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     ret, img_bw = cv2.threshold(img_gray, 200, 255, cv2.THRESH_BINARY)
-
     lines = cv2.HoughLinesP(img_bw, rho=1, theta=np.pi/180, threshold=150, minLineLength=10, maxLineGap=30)
-    #print(lines[0])
-    for line in lines:
-        x1, y1, x2, y2 = line[0]
-        if x1 == x2:
-            continue
-        slope = (y2-y1)/(x2-x1)
-        intercept = y1 - slope*x1
-        print([slope, intercept])
-        if 0 < slope < 0.1 and 100 < intercept < 240:
-            print(" 0 =  {0:.2f} * x + {1:.2f} - y".format(slope, intercept))
-            break
-            #cv2.line(img, (x1, y1), ( x2, y2), (0,255,0), 5 )
+    if lines is not None:
+        for line in lines:
+            print()
+            x1, y1, x2, y2 = line[0]
+            if x1 == x2:
+                continue
+            slope = (y2-y1)/(x2-x1)
+            intercept = y1 - slope*x1
+            if 0 < slope < 0.1 and 100 < intercept < 240:
+                print(" 0 =  {0:.2f} * x + {1:.2f} - y".format(slope, intercept))
+                mask = np.zeros(img_bw.shape, dtype=np.uint8)
+                cv2.line(mask, (0, int(slope * 0 + intercept)), (640, int(slope * 640 + intercept)), (255), 4)     
+                # draw mask of line
+                ret, img_bw_150 = cv2.threshold(img_gray, 120, 255, cv2.THRESH_BINARY)
+                mask = cv2.bitwise_and(mask, img_bw_150)
+                img[:, :, 0] = np.where(mask == 255 ,100, img[:, :, 0])
+                img[:, :, 1] = np.where(mask == 255 ,91, img[:, :, 1])
+                img[:, :, 2] = np.where(mask == 255 ,210, img[:, :, 2]) 
+                return slope, intercept, mask, img
 
-    mask = np.zeros(img_bw.shape, dtype=np.uint8)
-    cv2.line(mask, (0, int(slope * 0 + intercept)), (640, int(slope * 640 + intercept)), (255), 4)
-    
+    return 0, 0, 0, img
 
-    return slope, intercept, mask
 
 def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes, list_full_number_plates, flag_red_light, list_traffic_violation_mode, mask_line):
-    # All the results have been drawn on image. Now display the image.
-    for i, box in enumerate(list_License_Plate_box):
-        if len(box) > 0 and list_real_plate_mode[i]:
-            cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
-            cv2.putText(image_ori, "Plate", (box[1], box[0] ), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),2)  
-        if len(list_full_number_plates[i]) > 0:
-            cv2.putText(image_ori, list_full_number_plates[i] , (box[1], box[2]+ 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0),2)  
-    for i,box in enumerate(vehicle_boxes):
-        cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
-        cv2.putText(image_ori, str(class_text[classID[i]]), (box[1], box[2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0),2)
-
-
-
-    # Visualize date time
-    now = datetime.now()
-    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-    cv2.putText(image_ori, dt_string, (5, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0),1)
-
-    # display location
-    cv2.putText(image_ori, """10*14'09.9"N 106*22'20.6"E""", (180, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0),1) 
-
-    # display traffic light mode
-    cv2.putText(image_ori, "Traffic Light Status: ", (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0),2) 
-    if flag_red_light:
-        cv2.circle(image_ori, (210,15), 13, (0,0,255), -1)
-        # pass red light or not
-        if True in list_traffic_violation_mode:
-            cv2.putText(image_ori, "Traffic Violation", (450, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255),2) 
-    else:
-        cv2.circle(image_ori, (210,15), 13, (0,255,0), -1)
-    
-
     
     # draw mask of line
     ret, img_bw_150 = cv2.threshold(cv2.cvtColor(image_ori, cv2.COLOR_BGR2GRAY), 120, 255, cv2.THRESH_BINARY)
     mask = cv2.bitwise_and(mask_line, img_bw_150)
-    image_ori[:, :, 0] = np.where(mask == 255 ,255, image_ori[:, :, 0])
-    image_ori[:, :, 1] = np.where(mask == 255 ,0, image_ori[:, :, 1])
+    image_ori[:, :, 0] = np.where(mask == 255 ,100, image_ori[:, :, 0])
+    image_ori[:, :, 1] = np.where(mask == 255 ,91, image_ori[:, :, 1])
+    image_ori[:, :, 2] = np.where(mask == 255 ,210, image_ori[:, :, 2])
+ 
+    # # draw vehicles
+    for i,box in enumerate(vehicle_boxes):
+        if list_traffic_violation_mode[i]:
+            cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
+        else:
+            cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,255,0), 2)
+        cv2.putText(image_ori, str(class_text[classID[i]]), (box[1], box[2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0),2)
+        if list_traffic_violation_mode[i] and flag_red_light:
+            image_ori[box[0]: box[2], box[1]: box[3], 2] = 250
+
+    # # # # # Draw license plate
+    for i, box in enumerate(list_License_Plate_box):
+        if len(box) == 0:
+            continue
+        if list_real_plate_mode[i]:
+            cv2.putText(image_ori, "Plate", (box[1], box[0] - 5 ), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),2)  
+            cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,255,0), 2)   
+        if len(list_full_number_plates) > 0:
+            cv2.putText(image_ori, list_full_number_plates[0] , (box[1], box[2]+ 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 50, 50),2) 
+
+    # # Visualize date time
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+    cv2.putText(image_ori, dt_string, (5, 460), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0),2)
+
+    # display location
+    cv2.putText(image_ori, """Location: 10*14'09.9"N 106*22'20.6"E""", (5, 475), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0),2) 
+
+    # display traffic light mode
+    cv2.putText(image_ori, "Traffic Light Status: ", (5, 440), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0),2) 
+    if flag_red_light:
+        cv2.circle(image_ori, (210,435), 13, (0,0,255), -1)
+        # pass red light or not
+        if True in list_traffic_violation_mode:
+            cv2.putText(image_ori, "Traffic Violation", (450, 470), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255),2) 
+    else:
+        cv2.circle(image_ori, (210,435), 13, (0,255,0), -1)
+    
+
     return image_ori
 
 def rotate_bound(image, angle):
@@ -258,7 +277,6 @@ def recognize_plate(input_image,
                         list_number.append([x1_ori, int(classes[0][idx] - 1)])
                         cv2.rectangle(image_resized, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
                         cv2.putText(image_resized, "{}".format(int(classes[0][idx] - 1)), (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0),2)  
-                        print(classes[0][idx] - 1, scores[0][idx])
                 elif h >= h_plate / 2 and h > w: # plate with 1 line only
                     list_number.append(int(classes[0][idx] - 1))
 
@@ -266,7 +284,7 @@ def recognize_plate(input_image,
         numbers = [number for x, number in list_number]
         list_number_plates.append(numbers)
 
-        cv2.imshow("pl", image_resized)
+        #cv2.imshow("pl", image_resized)
     return list_real_plate_mode, list_number_plates
 
 def crop_plate_region(input_image, vehicle_boxes, classID):
@@ -356,13 +374,28 @@ def detect_vehicle(input_image, sess, detection_boxes, detection_scores, detecti
             break
     return vehicle_boxes, classID
 
-
+def send_message_arduino(arduino_moduleSim, list_index_excel):
+    now = datetime.now()
+    thoigian = now.strftime("%H:%M:%S %d/%m/%Y")
+    for idx in list_index_excel:
+        if idx is None:
+            continue
+        message = "warning:" + list_number_phones[idx] + thoigian + list_num_plates_1[idx] + list_num_plates_excel[idx]
+        print("Message: ", message)
+        arduino_moduleSim.write(message.encode())
+        print("-Sent data to Arduino-")
+        time.sleep(0.1)
+        for i in range(10):
+            data = arduino_moduleSim.readline()
+            data = data.decode("utf-8").rstrip('\r\n') 
+            print(data)
+        # while True:
+        #     print(" data received: ",arduino_moduleSim.readline().decode("utf-8"))
 
 # Grab path to current working directory
 CWD_PATH = os.getcwd()
 
-# Path to frozen detection graph .pb file, which contains the model that is used
-# for object detection.
+# Path to frozen detection graph .pb file, which contains the model that is used for object detection.
 PATH_TO_CKPT_vehicle = os.path.join(CWD_PATH,"Vehicle_ssd",'frozen_inference_graph.pb')
 PATH_TO_CKPT_LicensePlate = os.path.join(CWD_PATH,"License_PLate",'frozen_inference_graph.pb')
 PATH_TO_CKPT_NumberLetter = os.path.join(CWD_PATH,"NumberLetter",'frozen_inference_graph.pb')
@@ -374,10 +407,6 @@ PATH_TO_LABELS_NumberLetter = os.path.join(CWD_PATH,'training','labelmap_NumberL
 
 
 # Load the label map.
-# Label maps map indices to category names, so that when our convolution
-# network predicts `5`, we know that this corresponds to `king`.
-# Here we use internal utility functions, but anything that returns a
-# dictionary mapping integers to appropriate string labels would be fine
 label_map_vehicle = label_map_util.load_labelmap(PATH_TO_LABELS_vehicle)
 categories_vehicle = label_map_util.convert_label_map_to_categories(label_map_vehicle, max_num_classes=2, use_display_name=True)
 category_index_vehicle = label_map_util.create_category_index(categories_vehicle)
@@ -446,82 +475,74 @@ num_detections_LicensePlate = detection_graph_LicensePlate.get_tensor_by_name('n
 num_detections_NumberLetter = detection_graph_NumberLetter.get_tensor_by_name('num_detections:0')
 
 
-########### LOAD EXCEL FILE ############################################################
-csv_sumary_path = "E:\\LicensePlateRecognition\\Autofill_Sumary\\Information_License_plate.xlsx"
-data = pd.read_excel(csv_sumary_path, converters={'Biển số phần 2':str, 'Biển số phần 1':str})
-# Duyet 1 cot
-num_plates_excel = list(data["Biển số phần 2"])
-num_plates_1 = list(data["Biển số phần 1"])
 
-def check_number_plate(list_number_plates, num_plates_excel, num_plates_1):
-    list_index_excel = []
-    list_full_number_plates = []
+########### LOAD EXCEL FILE #####################################################################
+csv_sumary_path = "E:\\LicensePlateRecognition\\Autofill_Sumary\\Information_License_plate.xlsx"
+data = pd.read_excel(csv_sumary_path, converters={'Biển số phần 2':str, 'Biển số phần 1':str, "Số điện thoại":str})
+# Duyet 1 cot
+list_num_plates_excel = list(data["Biển số phần 2"])
+list_num_plates_1 = list(data["Biển số phần 1"])
+list_number_phones = list(data["Số điện thoại"])
+
+##################################################################################################
+def check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected, list_full_number_plates):
+    #list_full_number_plates = []
     for num_plate_predict in list_number_plates:
         flag_matching = False
         if num_plate_predict == False:
-            list_index_excel.append(None)
-            list_full_number_plates.append([])
+            #list_full_number_plates.append([])
             continue
         num_plate_predict = ''.join(map(str, num_plate_predict))
-        print(num_plate_predict)
         if len(num_plate_predict) == 5:
-            if num_plate_predict in num_plates_excel:
-                    #print(num_plates_excel.index(num_plate_predict))
+            if num_plate_predict in list_num_plates_excel:
+                    #print(list_num_plates_excel.index(num_plate_predict))
                     print("100%")
                     flag_matching = True 
-                    index_excel = num_plates_excel.index(num_plate_predict)
+                    index_excel = list_num_plates_excel.index(num_plate_predict)
             else:
-                for num_plate in num_plates_excel:
+                for num_plate in list_num_plates_excel:
                     for i in range(5):
                         if num_plate.replace(num_plate[i], '') == num_plate_predict.replace(num_plate_predict[i], ''):
                             print("80%")   
                             flag_matching = True      
-                            index_excel = num_plates_excel.index(num_plate)   
+                            index_excel = list_num_plates_excel.index(num_plate)   
 
         elif len(num_plate_predict) == 4: 
-            for num_plate in num_plates_excel:
+            for num_plate in list_num_plates_excel:
                 for i in range(5):
                     if num_plate.replace(num_plate[i],'') == num_plate_predict:
                         print("80%")  
                         flag_matching = True 
-                        index_excel = num_plates_excel.index(num_plate)
+                        index_excel = list_num_plates_excel.index(num_plate)
         elif len(num_plate_predict) == 3:
-            for num_plate in num_plates_excel:
+            for num_plate in list_num_plates_excel:
                 for i in range(4):
                     if num_plate.replace(num_plate[i:i+2],'') == num_plate_predict:
                         print("60%")  
                         flag_matching = True 
-                        index_excel = num_plates_excel.index(num_plate)
-                
-        if flag_matching:
-            list_index_excel.append(index_excel)
-            list_full_number_plates.append(num_plates_1[index_excel] + num_plates_excel[index_excel])
-        else:
-            list_index_excel.append(None)
-            list_full_number_plates.append([])
-    return  list_index_excel, list_full_number_plates
+                        index_excel = list_num_plates_excel.index(num_plate)
 
-############## Set up connection between laptop and Arduino ############################
-try:                                                                                   # 
-    arduino_lighttraffic = serial.Serial("COM3", 9600 ,timeout=1)                      # 
-    arduino_moduleSim = serial.Serial("COM5", 9600 ,timeout=1)                         # 
-    print("Found out Arduino Uno device")                                              #
-except:                                                                                #
-    print("Please checl the port")                                                     #
-########################################################################################
-
-
-
+    
+        if flag_matching and index_excel not in list_index_plate_excel_detected:
+            list_index_plate_excel_detected.append(index_excel)
+            list_full_number_plates.append(list_num_plates_1[index_excel] + list_num_plates_excel[index_excel])
+        # else:
+        #     list_full_number_plates.append([])
+    return  list_index_plate_excel_detected, list_full_number_plates
+    
 if __name__=="__main__":
     # Parse command line arguments
-    # parser = argparse.ArgumentParser(
-    #     description='Detect vehicle and License Plate using Object Detection .')
+    parser = argparse.ArgumentParser(
+        description='Detect vehicle and License Plate using Object Detection .')
     # # parser.add_argument("command",
     # #                     metavar="<command>",
     # #                     help="'train' or 'test'")
-    # parser.add_argument('--data_dir', required=False,
-    #                     metavar="/home/simon/mask_rcnn/data/fci",
-    #                     help='Directory of the fci dataset')
+    parser.add_argument('--port_sim', required=False,
+                        metavar="",
+                        help='Port number of Arduino( connect with module sim)')
+    parser.add_argument('--port_light', required=False,
+                        metavar="",
+                        help='Port number of Arduino( connect with traffic light sign)')
     # parser.add_argument('--logs', required=False,
     #                     default=DEFAULT_LOGS_DIR,
     #                     metavar="/path/to/logs/",
@@ -532,21 +553,30 @@ if __name__=="__main__":
  
     # parser.add_argument('--jsonconfig_path', default=os.path.join(ROOT_DIR,'mrcnn/sample_config.json'),
     #                     help='path to config json file')
-    # args = parser.parse_args()
+    args = parser.parse_args()
+
+
+
+    ############## Set up connection between laptop and Arduino ############################
+    try:                                                                                   # 
+        arduino_lighttraffic = serial.Serial(args.port_light, 9600 ,timeout=1)             # 
+        arduino_moduleSim = serial.Serial(args.port_sim, 115200 ,timeout=1)                #    
+        print("Found out Arduino Uno devices")                                             #
+    except:                                                                                #
+        print("Please check the port again")                                               #
+    ########################################################################################
 
     # Initialize Camera
     cam = cv2.VideoCapture(0)
+    list_index_plate_excel_detected = []
+    list_full_number_plates = []
+    flag_red_light = True
     class_text = ["Background","motorbike", "car"]
     first_frame = True
-    flag_red_light = False
-    number_plate = ""
-    
-    #################################
-    path = "E:\\project\\data_test2"
-    files = [i for i in os.listdir(path) if i.endswith(".png")]
-    stt = 0
 
     while True:
+
+
         # read data from Arduino, "0" :  red light mode
         data_light_traffic = arduino_lighttraffic.readline()
         data_light_traffic = data_light_traffic.decode("utf-8").rstrip('\r\n') 
@@ -555,60 +585,66 @@ if __name__=="__main__":
         if data_light_traffic == "1":
             flag_red_light = False
 
-        #ret, frame = cam.read()
-        image_ori = cv2.imread(os.path.join(path, files[stt]))
-        # detect line
-        if first_frame:
-             slope, intercept, mask_line = detect_line(image_ori)
-            first_frame = False
 
-        vehicle_boxes, classID = detect_vehicle(image_ori, 
-                                                sess_vehicle, 
-                                                detection_boxes_vehicle, 
-                                                detection_scores_vehicle, 
-                                                detection_classes_vehicle, 
-                                                num_detections_vehicle, 
-                                                image_tensor_vehicle,
-                                                threshold_score=0.8)
-
-        if len(vehicle_boxes) == 0: # Dont have any vehicle
+        ret, image_ori = cam.read()
+        if image_ori is None:
             continue
 
-        # ## Crop region of interest of License Plate to pass another model which is used to detect License Plate 
-        list_region_plate = crop_plate_region(image_ori, vehicle_boxes, classID)
-        list_License_Plate_box = detect_License_Plate(list_region_plate, 
-                                                        vehicle_boxes,
-                                                        sess_LicensePlate, 
-                                                        detection_boxes_LicensePlate, 
-                                                        detection_scores_LicensePlate, 
-                                                        detection_classes_LicensePlate, 
-                                                        num_detections_LicensePlate, 
-                                                        image_tensor_LicensePlate,
-                                                        threshold_score=0.003)   
-
-        list_real_plate_mode, list_number_plates = recognize_plate(image_ori, 
-                                                                list_License_Plate_box,
-                                                                sess_NumberLetter,
-                                                                detection_boxes_NumberLetter,
-                                                                detection_scores_NumberLetter,
-                                                                detection_classes_NumberLetter,
-                                                                num_detections_NumberLetter,
-                                                                image_tensor_NumberLetter,
-                                                                threshold_score=0.2)
-
-        list_index_excel, list_full_number_plates = check_number_plate(list_number_plates, num_plates_excel, num_plates_1)
+        if first_frame:
+            slope, intercept, mask_line, image_ori = detect_line(image_ori)  
+        else:
         
-        list_traffic_violation_mode = check_pass_red_light(vehicle_boxes, slope, intercept)
+            vehicle_boxes, classID = detect_vehicle(image_ori, 
+                                                    sess_vehicle, 
+                                                    detection_boxes_vehicle, 
+                                                    detection_scores_vehicle, 
+                                                    detection_classes_vehicle, 
+                                                    num_detections_vehicle, 
+                                                    image_tensor_vehicle,
+                                                    threshold_score=0.8)
+            # ## Crop region of interest of License Plate to pass another model which is used to detect License Plate 
+            list_region_plate = crop_plate_region(image_ori, vehicle_boxes, classID)
 
-        image_ori = visualize_image(image_ori, list_License_Plate_box, 
-                                    vehicle_boxes, 
-                                    list_full_number_plates, 
-                                    flag_red_light,
-                                    list_traffic_violation_mode,
-                                    mask_line)
+            list_License_Plate_box = detect_License_Plate(list_region_plate, 
+                                                            vehicle_boxes,
+                                                            sess_LicensePlate, 
+                                                            detection_boxes_LicensePlate, 
+                                                            detection_scores_LicensePlate, 
+                                                            detection_classes_LicensePlate, 
+                                                            num_detections_LicensePlate, 
+                                                            image_tensor_LicensePlate,
+                                                            threshold_score=0.003)   
+            list_real_plate_mode, list_number_plates = recognize_plate(image_ori, 
+                                                                    list_License_Plate_box,
+                                                                    sess_NumberLetter,
+                                                                    detection_boxes_NumberLetter,
+                                                                    detection_scores_NumberLetter,
+                                                                    detection_classes_NumberLetter,
+                                                                    num_detections_NumberLetter,
+                                                                    image_tensor_NumberLetter,
+                                                                    threshold_score=0.2)
+
+            list_index_plate_excel_detected, list_full_number_plates = check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected, list_full_number_plates)
+            list_traffic_violation_mode = check_pass_red_light(vehicle_boxes, slope, intercept)
+            image_ori = visualize_image(image_ori, list_License_Plate_box, 
+                                        vehicle_boxes, 
+                                        list_full_number_plates, 
+                                        flag_red_light,
+                                        list_traffic_violation_mode,
+                                        mask_line)
+            if flag_red_light and True in list_traffic_violation_mode:
+                vuot_den_do_audio()
+                send_message_arduino(arduino_moduleSim, list_index_plate_excel_detected)
+                list_full_number_plates = []
+                list_index_plate_excel_detected = []
+            if not flag_red_light:
+                list_index_plate_excel_detected = []
+                #list_full_number_plates = []
+       
         cv2.imshow("", image_ori) 
-        if cv2.waitKey(0) == 27:
+        if cv2.waitKey(1) == 27:
             break
-
-
+        elif cv2.waitKey(1) == ord('s'):
+            first_frame = False
+        
     cv2.destroyAllWindows()

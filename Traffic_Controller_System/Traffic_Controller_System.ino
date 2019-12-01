@@ -1,4 +1,4 @@
-
+ 
 #define latch1    4
 #define clock1    3
 #define data1     5
@@ -50,7 +50,7 @@ void time_set(int thoigian)
       digitalWrite(do2, 1);
       digitalWrite(do1, 0);
       digitalWrite(vang2, 0);
-      Serial.println(0); // Switch red green light to red light
+      Serial.println(1); // Switch red green light to red light
     }
     dodem=j;
     if(j<4)
