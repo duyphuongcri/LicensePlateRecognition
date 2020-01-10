@@ -10,9 +10,9 @@
 import numpy as np
 import cv2
 import os
-
-path = "E:\\project\\LicensePLate"
-files = [i for i in os.listdir(path) if i.endswith(".png")]
+import matplotlib.pyplot as plt
+path = "E:\\project\\test"
+files = [i for i in os.listdir(path)]
 
 for filename in files:
 
@@ -26,4 +26,7 @@ for filename in files:
         padding = [(0, 0), (0, -pd),(0,0)]
     image = np.pad(image, padding, mode='constant', constant_values=0)
     resized = cv2.resize(image,(300, 300), interpolation=cv2.INTER_AREA)
-    cv2.imwrite(os.path.join("E:\\project\\LicensePLate_resized", filename),resized)
+    # cv2.imshow("",resized)
+    # cv2.waitKey(0)
+
+    cv2.imwrite(os.path.join("E:\\project\\test", filename[:-4] + ".png"),resized)

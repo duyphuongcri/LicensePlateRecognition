@@ -53,7 +53,7 @@ PATH_TO_LABELS = os.path.join(CWD_PATH,'training','labelmap.pbtxt')
 # dictionary mapping integers to appropriate string labels would be fine
 
 label_map = label_map_util.load_labelmap(PATH_TO_LABELS)
-categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=11, use_display_name=True)
+categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=1, use_display_name=True)
 category_index = label_map_util.create_category_index(categories)
 print(categories)
 
@@ -149,53 +149,124 @@ def compute_iou(box, boxes, box_area, boxes_area):
     ious = intersections / unions
     return ious
 
-import time
-path = "E:\\project\\LicensePLate_resized\\test"
-files = [i for i in os.listdir(path) if i.endswith(".png")]
-n=0
-for filename in files:
-    start = time.time()
-    print(filename)
-    image_ori = cv2.imread(os.path.join(path, filename))
 
-    h_ori, w_ori = image_ori.shape[:2]
-    #print("size of original Image", h_ori, w_ori)
-    image_expanded = np.expand_dims(image_ori, axis=0)
+
+def detect_vehicle(input_image, sess, detection_boxes, detection_scores, detection_classes, num_detections, image_tensor, threshold_score):
+    h_ori, w_ori = input_image.shape[:2]
+
+    ##Resize input image
+    image = cv2.resize(input_image, (640,480))
+    image_expanded = np.expand_dims(image, axis=0)
+     
+    #image = input_image
+    #image_expanded = np.expand_dims(image, axis=0)
+
     # Perform the actual detection by running the model with the image as input
     (boxes, scores, classes, num) = sess.run(
         [detection_boxes, detection_scores, detection_classes, num_detections],
         feed_dict={image_tensor: image_expanded})
 
-    # Draw the results of the detection (aka 'visulaize the results')
-    
-    # vis_util.visualize_boxes_and_labels_on_image_array(
-    #     image_ori,
-    #     np.squeeze(boxes),
-    #     np.squeeze(classes).astype(np.int32),
-    #     np.squeeze(scores),
-    #     category_index,
-    #     use_normalized_coordinates=True,
-    #     line_thickness=1,
-    #     min_score_thresh=0.90)
-    boxes[0][:,0] = boxes[0][:,0]*300
-    boxes[0][:,1] = boxes[0][:,1]*300
-    boxes[0][:,2] = boxes[0][:,2]*300
-    boxes[0][:,3] = boxes[0][:,3]*300
-
-    #index = non_max_suppression(boxes[0][:int(num[0])],scores[0][:int(num[0])], 0.3)
-    n = 0
-    for i in range(len(boxes[0])):
-        y1, x1, y2, x2 = boxes[0][i][:]
-        h, w = y2 - y1, x2 - x1
-        if scores[0][i] > 0.2 and  h < 150 and w < 100:
-            cv2.rectangle(image_ori, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-            cv2.putText(image_ori, "{}".format(int(classes[0][i] - 1)), (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0),2)  
-            print(classes[0][i] - 1, scores[0][i])
-        else: 
+    vehicle_boxes = []
+    classID = []
+    for i in range(5):
+        if scores[0][i] > threshold_score:
+            y1, x1, y2, x2 = int(boxes[0][i][0]*image.shape[0]), int(boxes[0][i][1]*image.shape[1]), int(boxes[0][i][2]*image.shape[0]), int(boxes[0][i][3]*image.shape[1])
+            # mapping coordinate from resized image to original image
+            hor_ratio, ver_ratio = input_image.shape[1] / image.shape[1], input_image.shape[0] / image.shape[0]
+            y1_vehicle_ori, x1_vehicle_ori, y2_vehicle_ori, x2_vehicle_ori = int(y1*ver_ratio), int(x1*hor_ratio), int(y2*ver_ratio), int(x2*hor_ratio)
+            if x1_vehicle_ori > 10:
+                x1_vehicle_ori = x1_vehicle_ori - 10
+            else:
+                x1_vehicle_ori = 0
+            vehicle_boxes.append([y1_vehicle_ori, x1_vehicle_ori, y2_vehicle_ori, x2_vehicle_ori])
+            classID.append(int(classes[0][i]))
+        else:
             break
+    return vehicle_boxes, classID
+
+def crop_vehicle_region(input_image, vehicle_boxes, classID):
+    list_region_plate = []
+    list_x1_region = []
+    list_mode_crop = []
+    for i, box in enumerate(vehicle_boxes):  
+        img_region_plate =  input_image[box[0]: box[2], box[1]: box[3]]
+        # padding to get quare image
+        if box[2] - box[0] > box[3] - box[1]: # h > w 
+            right_pad = (box[2] - box[0]) - (box[3] - box[1])
+            padding = [(0, 0), (0, right_pad), (0, 0)]
+            img_region_plate = np.pad(img_region_plate, padding, mode='constant', constant_values=0)
+        elif box[2] - box[0] < box[3] - box[1]: # h < w 
+            bottom_pad = (box[3] - box[1]) - (box[2] - box[0])
+            padding = [(0, bottom_pad), (0, 0), (0, 0)]
+            img_region_plate = np.pad(img_region_plate, padding, mode='constant', constant_values=0)
+        
+        ###
+        # if img_region_plate.shape[0] > 300:
+        #     img_region_plate = img_region_plate[0:300, 0:300]
+        img_region_plate = cv2.resize(img_region_plate, (300, 300))
+        #cv2.imwrite("E:\\project\\data_helmet\\{0}_{1}.png".format(filename[:-4], i), img_region_plate)
+
+        list_region_plate.append(img_region_plate)   
+    return list_region_plate
+
+import time
+path = "E:\\project\\data"
+files = [i for i in os.listdir(path) if i.endswith(".png") and i.startswith("image")]
+n=0
+for filename in files:
+    print(filename)
+    image_ori = cv2.imread(os.path.join(path, filename))
+    #image_ori = cv2.imread("E:\\Capture.PNG")
+    #image_ori = image_ori[:, 240:1680]
+    img_resized = cv2.resize(image_ori, (640, 480))
+    # vehicle_boxes, classID = detect_vehicle(image_ori, 
+    #                                         sess, 
+    #                                         detection_boxes, 
+    #                                         detection_scores, 
+    #                                         detection_classes, 
+    #                                         num_detections, 
+    #                                         image_tensor,
+    #                                         threshold_score=0.8)
+    # _ = crop_vehicle_region(image_ori, vehicle_boxes, classID)                                        
+    # # h_ori, w_ori = image_ori.shape[:2]
+
+    #print("size of original Image", h_ori, w_ori)
+    image_expanded = np.expand_dims(img_resized, axis=0)
+    # Perform the actual detection by running the model with the image as input
+    (boxes, scores, classes, num) = sess.run(
+        [detection_boxes, detection_scores, detection_classes, num_detections],
+        feed_dict={image_tensor: image_expanded})
+
+    # Draw the results of the detection (aka 'visualize the results')
+    
+    vis_util.visualize_boxes_and_labels_on_image_array(
+        img_resized,
+        np.squeeze(boxes),
+        np.squeeze(classes).astype(np.int32),
+        np.squeeze(scores),
+        category_index,
+        use_normalized_coordinates=True,
+        line_thickness=1,
+        min_score_thresh=0.8)
+    # boxes[0][:,0] = boxes[0][:,0]*1080
+    # boxes[0][:,1] = boxes[0][:,1]*1440
+    # boxes[0][:,2] = boxes[0][:,2]*1080
+    # boxes[0][:,3] = boxes[0][:,3]*1440
+    # index = non_max_suppression(boxes[0][:int(num[0])],scores[0][:int(num[0])], 0.3)
+    # n = 0
+    # for i in range(len(boxes[0])):
+    #     y1, x1, y2, x2 = boxes[0][i][:]
+    #     h, w = y2 - y1, x2 - x1
+    #     if scores[0][i] > 0.5 and w / h < 2:
+    #         print("shape:", int(h/2), int(w))
+    #         # if y1 < image_ori.shape[0]/2 and y2 > image_ori.shape[0]/2 and classes[0][i] == 2:
+    #         #     cv2.imwrite("E:\\project\\data_plate\\{0}_{1}.png".format(filename[:-4], i), image_ori[int(y1 + h/2): int(y2), int(x1): int(x2)])   
+    #         cv2.rectangle(image_ori, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+    #         cv2.putText(image_ori, "{}".format(int(classes[0][i])), (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0),2)    
+    #     else: 
+    #         break
     # All the results have been drawn on image. Now display the image.
-    cv2.imshow("", image_ori) 
+    cv2.imshow("", img_resized) 
     if cv2.waitKey(0) == 27:
         break
-    print("timing: ",time.time() - start)
 cv2.destroyAllWindows()

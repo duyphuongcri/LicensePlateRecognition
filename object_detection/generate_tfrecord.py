@@ -1,17 +1,17 @@
 """
 Usage:
-  # From tensorflow/models/
-  # Create train data:
-  python generate_tfrecord.py --csv_input=images/train_labels.csv --image_dir=images/train --output_path=train.record
+# From tensorflow/models/
+# Create train data:
+python generate_tfrecord.py --csv_input=images/train_labels.csv --image_dir=images/train --output_path=train.record
 
-  # Create test data:
-  python generate_tfrecord.py --csv_input=images/test_labels.csv  --image_dir=images/test --output_path=test.record
+# Create test data:
+python generate_tfrecord.py --csv_input=images/test_labels.csv  --image_dir=images/test --output_path=test.record
 
-  #train model
-  python train.py --logtostderr --train_dir=training/ --pipeline_config_path=training/ssd_mobilenet_v2_coco.config
+#train model
+python train.py --logtostderr --train_dir=training/ --pipeline_config_path=training/ssd_mobilenet_v2_coco.config
 
-  #export
-  python export_inference_graph.py --input_type image_tensor --pipeline_config_path training/ssd_mobilenet_v2_coco.config --trained_checkpoint_prefix training/model.ckpt-177519 --output_directory inference_graph
+#export
+python export_inference_graph.py --input_type image_tensor --pipeline_config_path training/ssd_mobilenet_v2_coco.config --trained_checkpoint_prefix training/model.ckpt-16932 --output_directory inference_graph
 """
 from __future__ import division
 from __future__ import print_function
@@ -35,28 +35,10 @@ FLAGS = flags.FLAGS
 
 # TO-DO replace this with label map
 def class_text_to_int(row_label):
-    if row_label == '0':
+    if row_label == 'car':
         return 1
-    elif row_label == '1':
+    elif row_label == 'motorbike':
         return 2
-    elif row_label == '2':
-        return 3
-    elif row_label == '3':
-        return 4
-    elif row_label == '4':
-        return 5
-    elif row_label == '5':
-        return 6
-    elif row_label == '6':
-        return 7
-    elif row_label == '7':
-        return 8
-    elif row_label == '8':
-        return 9
-    elif row_label == '9':
-        return 10
-    elif row_label == 'letter':
-        return 11
     else:
         None
 

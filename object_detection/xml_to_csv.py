@@ -19,8 +19,7 @@ def xml_to_csv(path):
                      int(member[4][2].text),
                      int(member[4][3].text)
                      )
-            if value[3] == "car":
-                xml_list.append(value)
+            xml_list.append(value)
     column_name = ['filename', 'width', 'height', 'class', 'xmin', 'ymin', 'xmax', 'ymax']
     xml_df = pd.DataFrame(xml_list, columns=column_name)
     return xml_df
@@ -32,6 +31,5 @@ def main():
         xml_df = xml_to_csv(image_path)
         xml_df.to_csv(('images/' + folder + '_labels.csv'), index=None)
         print('Successfully converted xml to csv.')
-
 
 main()

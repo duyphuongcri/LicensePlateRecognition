@@ -26,6 +26,7 @@ epochs = 50
 ratio_testset = 0.15
 lrate = 0.001
 
+
 y0 = len(glob.glob(os.path.join("Dataset\\0" ,'*png')))
 y1 = len(glob.glob(os.path.join("Dataset\\1" ,'*png')))
 y2 = len(glob.glob(os.path.join("Dataset\\2" ,'*png')))
@@ -39,12 +40,12 @@ y9 = len(glob.glob(os.path.join("Dataset\\9" ,'*png')))
 
 # X_data
 X = []
-count = 0
-for i in glob.glob(os.path.join("Dataset\\0" ,'*png')): 
+flag = 0
+for i in glob.glob(os.path.join("Dataset\\0" ,'*png')): #["C:\a.png", "C:b.png"]
 	img = cv2.imread(i,0)
-	if count == 0:
+	if flag == 0:
 		X = img 
-		count = 1
+		flag = 1
 	else:
 		X = np.append(X,img, axis = 0)	
 print("Loading 10%..")
@@ -92,13 +93,13 @@ X = X / 255
 y = np.asarray([0]*y0 + [1]*y1 + [2]*y2 + [3]*y3 + [4]*y4 + [5]*y5 + [6]*y6 + [7]*y7 + [8]*y8 + [9]*y9)
 y.astype('uint8')
 
-
+########################
 model = Sequential()
 model.add(Conv2D(16, kernel_size=(5, 5),				 
                  activation='relu',
 				 strides=(1, 1),
                  input_shape= (64,64,1),
-				 padding='same',))
+				 padding='same',)) # valid
 model.add(MaxPooling2D(pool_size=(2, 2), 
                         strides=None, 
                         padding='valid', 
@@ -120,6 +121,7 @@ model.add(Flatten())
 model.add(Dense(100, activation='relu'))
 model.add(Dense(number_class, activation='softmax'))
 model.summary()
+###########################################
 
 
 #--------------------Train/Test-----------------------

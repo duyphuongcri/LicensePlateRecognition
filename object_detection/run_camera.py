@@ -3,6 +3,16 @@
 # Author: Duy-Phuong Dao
 # E-mail: duypphuongcri@gmail.com
 #############################################################################
+ """
+# count_vehicle_pass_on_line : so frame hinh xe can vach lien tiep
+# slope, intercept           : hệ số góc và điểm cắt trục y của phương trình đường thẳng của vạch kẽ đường
+# vehicle_boxes, classID = detect_vehicle() : vehicle_boxes-tọa độ y1,x1,y1,x2 của xe
+                                              classID-nhãn label của xe
+                                              detect_vehicle(): hàm detect xe
+# list_traffic_violation_mode: [False, True] chứa thông tin có vượt đèn đỏ hay không, True: có vượt đèn đỏ
+# list_index_plate_excel_detected : chứa vị trí của biển số xe detect đc trong file excel 
+# list_full_number_plates : chứa thông tin biển số xe trích xuất được
+"""
 
 # Import packages
 from __future__ import print_function
@@ -25,16 +35,142 @@ import time
 import argparse
 from datetime import datetime
 import serial
+
+#from merge_function import *
+################
+from mailmerge import MailMerge
+import xlrd
 import pandas as pd
 
+
+
+
+def load_mailing_wordsheet_merge(excel_path, docx_path)
+# Doc kiem tra duong dan
+    if(os.path.isfile(docx_path)== False or os.path.isfile(excel_path)== False ):
+        print("Cannot find input file.")
+        sys.exit()
+
+    # Doc file Word
+    print("Reading .docx file.")
+    document = MailMerge(docx_path)
+    #Get merge fields
+    print(document.get_merge_fields())
+    print("Done reading .docx file.")
+
+    # Doc file excel
+    print("Reading .xlsx file.")
+    book = xlrd.open_workbook(excel_path)
+    print("Done read .xlsx file.")
+
+    sheet_num = 0
+    work_sheet = book.sheet_by_index(sheet_num)
+    return work_sheet, document
+
+def mailing_merge_save_violate(work_sheet, index_row ,document, output_path):
+    
+    if(os.path.isfile(output_path) == True):
+        print("Output file already exists.")
+        sys.exit()
+    # Select the sheet that the data resids in
+    finalList = []
+    headers = []
+
+    #get the total number of the rows
+    # num_rows = work_sheet.nrows
+    # Format required for mail merge is:
+    # List [
+    # {Dictrionaty},
+    # {Dictrionaty},
+    # ....
+    # ]
+    current_row = 0
+    print("Preparing to merge.")
+    # while current_row < num_rows:
+    dictVal = dict()
+
+    # Make header
+    # if(current_row == 0):
+    header_row = 0
+    for col in range(work_sheet.ncols):
+        headers.append(work_sheet.cell_value(header_row,col))
+        # print(headers)
+
+    # Update dictVal
+    for col in range(work_sheet.ncols):
+        dictVal.update({headers[col]:str(work_sheet.cell_value(index_row,col))})
+        # print(dictVal)
+    
+    finalList.append(dictVal)
+    print(finalList)
+
+    print("Merge operation started.")
+    document.merge_pages(finalList)
+    print("Saving output file.")
+
+    time = datetime.now().strftime('%d_%m_%Y')
+    bien_so = work_sheet.cell_value(index_row,0) + work_sheet.cell_value(index_row,1) 
+    output_docx_name = bien_so + "_" + time
+    # output_docx_name = '1'
+    document.write(output_path + output_docx_name + ".docx")
+
+    print("Operation complete successfully.")
 ##################
 import pygame
 pygame.mixer.init()
-def vuot_den_do_audio():
+def phat_loa_vuot_den_do():
     if not pygame.mixer.music.get_busy():
-        pygame.mixer.music.load('E:\\LicensePlateRecognition\\audio\\a.mp3')
+        pygame.mixer.music.load('audio\\vuot_den_do.mp3')
+        pygame.mixer.music.play()
+def phat_loa_nhac_nho_dung_dung_vach():
+    if not pygame.mixer.music.get_busy():
+        pygame.mixer.music.load('audio\\dung_phuong_tien_dung_vach_vi_dinh.mp3')
         pygame.mixer.music.play()
 ##################
+def post_API_and_export_report(image_ori, list_index, work_sheet, document, output_path, lastest_number_plate):
+    now = datetime.now()
+    thoigian = now.strftime("%H:%M:%S %d/%m/%Y")
+    image_id = now.strftime("%H_%M_%S") + ".png"
+    cv2.imwrite("Hinh_anh_vi_pham\\{}".format(image_id), image_ori)
+
+    for idx in list_index:
+        if idx is None:
+            continue
+        # xuat bien ban xu phat
+        mailing_merge_save_violate(work_sheet, idx ,document, output_path)
+
+        bien_so = list_num_plates_1[idx] + list_num_plates_excel[idx]
+        if bien_so == lastest_number_plate:
+            continue
+        lastest_number_plate = bien_so
+
+        print("Send data")
+        # defining the api-endpoint  
+        #API_URL = "http://192.168.137.167:8000/newfails"
+        API_URL = "http://vuotdendotpbentre.ddns.net:8000/newfails"
+        # your API key here 
+        #API_KEY = "XXXXXXXXXXXXXXXXX"
+        
+        with open('Hinh_anh_vi_pham\\{}'.format(image_id), 'rb') as f:
+            img_str = 'data:image/png;base64,'
+            img_str += base64.b64encode(f.read()).decode('utf-8')
+
+            # data to be sent to api 
+            data = json.dumps({'Blate': bien_so, 
+                            'date':now.strftime("%Y/%m/%d"), 
+                            'time':now.strftime("%H:%M:%S"), 
+                            'img':img_str})
+            headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+            
+            # sending post request and saving response as response object 
+            r = requests.post(url=API_URL, data=data, headers=headers) 
+            
+            # extracting response text  
+            pastebin_url = r.text 
+            print("The pastebin URL is:%s"%pastebin_url) 
+
+#################
+
 def non_max_suppression(boxes, scores, threshold):	
     assert boxes.shape[0] == scores.shape[0]
     # bottom-left origin
@@ -93,26 +229,37 @@ def compute_iou(box, boxes, box_area, boxes_area):
     ious = intersections / unions
     return ious
 
-def check_pass_red_light(vehicle_boxes, slope, intercept):
+def check_pass_red_light(vehicle_boxes, slope, intercept, count_vehicle_pass_on_line):
     list_traffic_violation_mode =[]
     for i, box in enumerate(vehicle_boxes):
         if len(box) == 0:
-            list_traffic_violation_mode.append(False)
+            list_traffic_violation_mode.append(0)
             continue
+
         h, w = box[2] - box[0], box[3] - box[1]
         coor_x = box[1] + w * 0.8
-        coor_y = box[0] + h * 0.6
-        if slope * coor_x + intercept - coor_y > 0:
-            list_traffic_violation_mode.append(True)
+        coor_y = box[0] + h * 0.7
+        if slope * coor_x + intercept - coor_y > 0 and slope * (box[1] + w *0.2) + intercept - box[2] > 0:
+            count_vehicle_pass_on_line = 0
+            list_traffic_violation_mode.append(2)
+        elif slope * coor_x + intercept - coor_y > 0 and slope * (box[1] + w *0.2) + intercept - box[2] <= 0:
+            count_vehicle_pass_on_line =  count_vehicle_pass_on_line + 1 
+            #print(count_vehicle_pass_on_line)
+            if count_vehicle_pass_on_line > 15: #
+                list_traffic_violation_mode.append(1)
+            else:
+                list_traffic_violation_mode.append(0)
         else:
-            list_traffic_violation_mode.append(False)
-    return list_traffic_violation_mode
+            list_traffic_violation_mode.append(0)
+            count_vehicle_pass_on_line = 0
+
+    return list_traffic_violation_mode, count_vehicle_pass_on_line
 
 def detect_line(img):
     
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     ret, img_bw = cv2.threshold(img_gray, 200, 255, cv2.THRESH_BINARY)
-    lines = cv2.HoughLinesP(img_bw, rho=1, theta=np.pi/180, threshold=150, minLineLength=10, maxLineGap=30)
+    lines = cv2.HoughLinesP(img_bw, rho=1, theta=np.pi/180, threshold=100, minLineLength=10, maxLineGap=30)
     if lines is not None:
         for line in lines:
             print()
@@ -121,7 +268,7 @@ def detect_line(img):
                 continue
             slope = (y2-y1)/(x2-x1)
             intercept = y1 - slope*x1
-            if 0 < slope < 0.1 and 100 < intercept < 240:
+            if 0 < slope < 0.1 and 150 < intercept < 200:
                 print(" 0 =  {0:.2f} * x + {1:.2f} - y".format(slope, intercept))
                 mask = np.zeros(img_bw.shape, dtype=np.uint8)
                 cv2.line(mask, (0, int(slope * 0 + intercept)), (640, int(slope * 640 + intercept)), (255), 4)     
@@ -147,13 +294,14 @@ def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes, list_full_
  
     # # draw vehicles
     for i,box in enumerate(vehicle_boxes):
-        if list_traffic_violation_mode[i]:
+
+        cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,255,0), 2)
+        cv2.putText(image_ori, str(class_text[classID[i]]), (box[1], box[2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0),2)
+        if list_traffic_violation_mode[i] != 0 and flag_red_light:
+            image_ori[box[0]: box[2], box[1]: box[3], 2] = 250
             cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,0,255), 2)
         else:
             cv2.rectangle(image_ori, (box[1], box[0]),(box[3], box[2]), (0,255,0), 2)
-        cv2.putText(image_ori, str(class_text[classID[i]]), (box[1], box[2] + 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0),2)
-        if list_traffic_violation_mode[i] and flag_red_light:
-            image_ori[box[0]: box[2], box[1]: box[3], 2] = 250
 
     # # # # # Draw license plate
     for i, box in enumerate(list_License_Plate_box):
@@ -178,7 +326,7 @@ def visualize_image(image_ori, list_License_Plate_box, vehicle_boxes, list_full_
     if flag_red_light:
         cv2.circle(image_ori, (210,435), 13, (0,0,255), -1)
         # pass red light or not
-        if True in list_traffic_violation_mode:
+        if 2 in list_traffic_violation_mode:
             cv2.putText(image_ori, "Traffic Violation", (450, 470), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255),2) 
     else:
         cv2.circle(image_ori, (210,435), 13, (0,255,0), -1)
@@ -233,7 +381,7 @@ def recognize_plate(input_image,
         list_number = []
         image = input_image[box[0]: box[2], box[1]: box[3]]
         h_plate, w_plate = image.shape[:2]
-        print("Shape of plate box: ",h_plate, w_plate)
+        #print("Shape of plate box: ",h_plate, w_plate)
         img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         mean, stv = cv2.meanStdDev(img_gray)
         if mean > 90 and w_plate < 100 and h_plate < 100 and h_plate < w_plate:
@@ -261,7 +409,7 @@ def recognize_plate(input_image,
         boxes[0][:,3] = boxes[0][:,3]*image_resized.shape[1]
         # perform non-maximum suppression on the bounding boxes
         index = non_max_suppression(boxes[0][0:n_box],scores[0][0:n_box], 0.3)
-        print("list index: ", index)
+        #print("list index: ", index)
         ratio = h_plate / image_resized.shape[0] 
         for idx in range(9):
             if idx not in index:
@@ -287,7 +435,7 @@ def recognize_plate(input_image,
         #cv2.imshow("pl", image_resized)
     return list_real_plate_mode, list_number_plates
 
-def crop_plate_region(input_image, vehicle_boxes, classID):
+def crop_vehicle_region(input_image, vehicle_boxes, classID):
     list_region_plate = []
     list_x1_region = []
     list_mode_crop = []
@@ -377,6 +525,7 @@ def detect_vehicle(input_image, sess, detection_boxes, detection_scores, detecti
 def send_message_arduino(arduino_moduleSim, list_index_excel):
     now = datetime.now()
     thoigian = now.strftime("%H:%M:%S %d/%m/%Y")
+    print(list_index_excel)
     for idx in list_index_excel:
         if idx is None:
             continue
@@ -384,13 +533,12 @@ def send_message_arduino(arduino_moduleSim, list_index_excel):
         print("Message: ", message)
         arduino_moduleSim.write(message.encode())
         print("-Sent data to Arduino-")
-        time.sleep(0.1)
-        for i in range(10):
-            data = arduino_moduleSim.readline()
-            data = data.decode("utf-8").rstrip('\r\n') 
-            print(data)
-        # while True:
-        #     print(" data received: ",arduino_moduleSim.readline().decode("utf-8"))
+        # time.sleep(0.05)
+        # for i in range(10):
+        #     data = arduino_moduleSim.readline()
+        #     data = data.decode("utf-8").rstrip('\r\n') 
+        #     print(data)
+
 
 # Grab path to current working directory
 CWD_PATH = os.getcwd()
@@ -496,29 +644,29 @@ def check_number_plate(list_number_plates, list_num_plates_excel, list_num_plate
         if len(num_plate_predict) == 5:
             if num_plate_predict in list_num_plates_excel:
                     #print(list_num_plates_excel.index(num_plate_predict))
-                    print("100%")
+                    #print("100%")
                     flag_matching = True 
                     index_excel = list_num_plates_excel.index(num_plate_predict)
             else:
                 for num_plate in list_num_plates_excel:
                     for i in range(5):
-                        if num_plate.replace(num_plate[i], '') == num_plate_predict.replace(num_plate_predict[i], ''):
-                            print("80%")   
+                        if num_plate[:i] + num_plate[i+1:5] == num_plate[:i] + num_plate[i+1:5]:
+                            #print("80%")   
                             flag_matching = True      
                             index_excel = list_num_plates_excel.index(num_plate)   
 
         elif len(num_plate_predict) == 4: 
             for num_plate in list_num_plates_excel:
                 for i in range(5):
-                    if num_plate.replace(num_plate[i],'') == num_plate_predict:
-                        print("80%")  
+                    if num_plate[:i] + num_plate[i+1:5] == num_plate_predict:
+                        #print("80%")  
                         flag_matching = True 
                         index_excel = list_num_plates_excel.index(num_plate)
         elif len(num_plate_predict) == 3:
             for num_plate in list_num_plates_excel:
                 for i in range(4):
-                    if num_plate.replace(num_plate[i:i+2],'') == num_plate_predict:
-                        print("60%")  
+                    if num_plate[:i] + num_plate[i+2:5] == num_plate_predict:
+                        #print("60%")  
                         flag_matching = True 
                         index_excel = list_num_plates_excel.index(num_plate)
 
@@ -543,23 +691,12 @@ if __name__=="__main__":
     parser.add_argument('--port_light', required=False,
                         metavar="",
                         help='Port number of Arduino( connect with traffic light sign)')
-    # parser.add_argument('--logs', required=False,
-    #                     default=DEFAULT_LOGS_DIR,
-    #                     metavar="/path/to/logs/",
-    #                     help='Logs and checkpoints directory (default=logs/)')
-    # parser.add_argument('--weights', required=False,
-    #                     metavar="/home/simon/logs/weights.h5",
-    #                     help="Path to weights .h5 file or 'coco'")
- 
-    # parser.add_argument('--jsonconfig_path', default=os.path.join(ROOT_DIR,'mrcnn/sample_config.json'),
-    #                     help='path to config json file')
+
     args = parser.parse_args()
-
-
 
     ############## Set up connection between laptop and Arduino ############################
     try:                                                                                   # 
-        arduino_lighttraffic = serial.Serial(args.port_light, 9600 ,timeout=1)             # 
+        #arduino_lighttraffic = serial.Serial(args.port_light, 9600 ,timeout=1)             # 
         arduino_moduleSim = serial.Serial(args.port_sim, 115200 ,timeout=1)                #    
         print("Found out Arduino Uno devices")                                             #
     except:                                                                                #
@@ -573,28 +710,22 @@ if __name__=="__main__":
     flag_red_light = True
     class_text = ["Background","motorbike", "car"]
     first_frame = True
+    n = 0 # save frame
+    flag_predict_virtual_images = True # predict virtual image first
+    count_vehicle_pass_on_line = 0
+    lastest_number_plate = []
 
+    data_path = "E:\\LicensePlateRecognition\\Autofill_Sumary\\"
+    docx_path = data_path + "Bien_ban_vi_pham _version2.docx"
+    excel_path = data_path + "Information_License_plate.xlsx"
+    output_path = data_path + "Bien_ban\\"
+
+    work_sheet, document = load_mailing_wordsheet_merge(excel_path, docx_path)
     while True:
-
-
-        # read data from Arduino, "0" :  red light mode
-        data_light_traffic = arduino_lighttraffic.readline()
-        data_light_traffic = data_light_traffic.decode("utf-8").rstrip('\r\n') 
-        if data_light_traffic == "0": # red light
-            flag_red_light = True
-        if data_light_traffic == "1":
-            flag_red_light = False
-
-
-        ret, image_ori = cam.read()
-        if image_ori is None:
-            continue
-
-        if first_frame:
-            slope, intercept, mask_line, image_ori = detect_line(image_ori)  
-        else:
-        
-            vehicle_boxes, classID = detect_vehicle(image_ori, 
+        if flag_predict_virtual_images:
+            print("loadding model...")
+            img = cv2.imread("test.png")
+            vehicle_boxes, classID = detect_vehicle(img, 
                                                     sess_vehicle, 
                                                     detection_boxes_vehicle, 
                                                     detection_scores_vehicle, 
@@ -603,8 +734,8 @@ if __name__=="__main__":
                                                     image_tensor_vehicle,
                                                     threshold_score=0.8)
             # ## Crop region of interest of License Plate to pass another model which is used to detect License Plate 
-            list_region_plate = crop_plate_region(image_ori, vehicle_boxes, classID)
-
+            list_region_plate = crop_vehicle_region(img, vehicle_boxes, classID)
+            # Phát hiện vị trí biển số xe trong ảnh
             list_License_Plate_box = detect_License_Plate(list_region_plate, 
                                                             vehicle_boxes,
                                                             sess_LicensePlate, 
@@ -614,6 +745,57 @@ if __name__=="__main__":
                                                             num_detections_LicensePlate, 
                                                             image_tensor_LicensePlate,
                                                             threshold_score=0.003)   
+            # Trich xuat cac ki tu trong bien so xe
+            _, _ = recognize_plate(img, 
+                                    list_License_Plate_box,
+                                    sess_NumberLetter,
+                                    detection_boxes_NumberLetter,
+                                    detection_scores_NumberLetter,
+                                    detection_classes_NumberLetter,
+                                    num_detections_NumberLetter,
+                                    image_tensor_NumberLetter,
+                                    threshold_score=0.2)
+            flag_predict_virtual_images = False  
+            print("Done loading model")                       
+
+        # read data from Arduino, "0" :  red light mode
+        # data_light_traffic = arduino_lighttraffic.readline()
+        # data_light_traffic = data_light_traffic.decode("utf-8").rstrip('\r\n') 
+        # if data_light_traffic == "0": # red light
+        #     flag_red_light = True
+        # if data_light_traffic == "1":
+        #     flag_red_light = False
+
+        start = time.time()
+        ret, image_ori = cam.read()
+        #image_ori  = cv2.imread("E:\\project\\data_test2\\test2_00264.png")
+        if image_ori is None:
+            continue
+
+        if first_frame:
+            slope, intercept, mask_line, image_ori = detect_line(image_ori)  
+        else:   
+            vehicle_boxes, classID = detect_vehicle(image_ori, 
+                                                    sess_vehicle, 
+                                                    detection_boxes_vehicle, 
+                                                    detection_scores_vehicle, 
+                                                    detection_classes_vehicle, 
+                                                    num_detections_vehicle, 
+                                                    image_tensor_vehicle,
+                                                    threshold_score=0.8)
+            # ## Crop region of interest of License Plate to pass another model which is used to detect License Plate 
+            list_region_plate = crop_vehicle_region(image_ori, vehicle_boxes, classID)
+            # Phát hiện vị trí biển số xe trong ảnh
+            list_License_Plate_box = detect_License_Plate(list_region_plate, 
+                                                            vehicle_boxes,
+                                                            sess_LicensePlate, 
+                                                            detection_boxes_LicensePlate, 
+                                                            detection_scores_LicensePlate, 
+                                                            detection_classes_LicensePlate, 
+                                                            num_detections_LicensePlate, 
+                                                            image_tensor_LicensePlate,
+                                                            threshold_score=0.003)   
+            # Trich xuat cac ki tu trong bien so xe
             list_real_plate_mode, list_number_plates = recognize_plate(image_ori, 
                                                                     list_License_Plate_box,
                                                                     sess_NumberLetter,
@@ -625,26 +807,36 @@ if __name__=="__main__":
                                                                     threshold_score=0.2)
 
             list_index_plate_excel_detected, list_full_number_plates = check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected, list_full_number_plates)
-            list_traffic_violation_mode = check_pass_red_light(vehicle_boxes, slope, intercept)
+            # Kiem tra xem xe co vuot den do hay chua?
+            list_traffic_violation_mode, count_vehicle_pass_on_line = check_pass_red_light(vehicle_boxes, slope, intercept, count_vehicle_pass_on_line)
+            # Hien thi ket qua
             image_ori = visualize_image(image_ori, list_License_Plate_box, 
                                         vehicle_boxes, 
                                         list_full_number_plates, 
                                         flag_red_light,
                                         list_traffic_violation_mode,
                                         mask_line)
-            if flag_red_light and True in list_traffic_violation_mode:
-                vuot_den_do_audio()
-                send_message_arduino(arduino_moduleSim, list_index_plate_excel_detected)
+            if flag_red_light and 2 in list_traffic_violation_mode: # vuot den do
+                lastest_number_plate = post_API_and_export_report(image_ori ,list_index_plate_excel_detected, work_sheet, document, output_path, lastest_number_plate) # xuat bien ban xu phat
+                phat_loa_vuot_den_do() # phat loa
+                send_message_arduino(arduino_moduleSim, list_index_plate_excel_detected) # gui tin nhan 
                 list_full_number_plates = []
                 list_index_plate_excel_detected = []
+                #cv2.imwrite()
+            elif flag_red_light and 1 in list_traffic_violation_mode: # can vach ke duong
+                phat_loa_nhac_nho_dung_dung_vach()
             if not flag_red_light:
                 list_index_plate_excel_detected = []
+                count_vehicle_pass_on_line = 0
                 #list_full_number_plates = []
-       
+
+        print("FPS: {}".format(1/(time.time() - start)))
         cv2.imshow("", image_ori) 
         if cv2.waitKey(1) == 27:
             break
-        elif cv2.waitKey(1) == ord('s'):
+        elif cv2.waitKey(30) == ord('s'):
             first_frame = False
+        #cv2.imwrite("E:\\a\\{}.png".format(n), image_ori)
+        n += 1
         
     cv2.destroyAllWindows()

@@ -20,7 +20,7 @@ sys.path.append("..")
 # Import utilites
 from utils import label_map_util
 from utils import visualization_utils as vis_util
-
+import requests
 import time
 import argparse
 from datetime import datetime
@@ -28,14 +28,58 @@ import serial
 import pandas as pd
 import mailmerge
 import xlrd
+import base64
+import json
 ##################
 import pygame
 pygame.mixer.init()
 def vuot_den_do_audio():
     if not pygame.mixer.music.get_busy():
-        pygame.mixer.music.load('E:\\LicensePlateRecognition\\audio\\a.mp3')
+        pygame.mixer.music.load('E:\\LicensePlateRecognition\\audio\\vuot_den_do.mp3')
         pygame.mixer.music.play()
 ##################
+def post_API(image_ori, list_index, lastest_number_plate):
+    now = datetime.now()
+    thoigian = now.strftime("%H:%M:%S %d/%m/%Y")
+    image_id = now.strftime("%H_%M_%S") + ".png"
+    cv2.imwrite("E:\\LicensePlateRecognition\\object_detection\\Hinh_anh_vi_pham\\{}".format(image_id), image_ori)
+
+    for idx in list_index:
+        if idx is None:
+            continue
+        bien_so = list_num_plates_1[idx] + list_num_plates_excel[idx]
+        if bien_so == lastest_number_plate:
+            continue
+        lastest_number_plate = bien_so
+
+        print("bien so: ", bien_so)
+
+        print("Send data")
+        # defining the api-endpoint  
+        #API_URL = "http://192.168.137.167:8000/newfails"
+        API_URL = "http://vuotdendotpbentre.ddns.net:8000/newfails"
+        # your API key here 
+        API_KEY = "XXXXXXXXXXXXXXXXX"
+        
+        with open('E:\\LicensePlateRecognition\\object_detection\\Hinh_anh_vi_pham\\{}'.format(image_id), 'rb') as f:
+            img_str = 'data:image/png;base64,'
+            img_str += base64.b64encode(f.read()).decode('utf-8')
+
+            # data to be sent to api 
+            data = json.dumps({'Blate': bien_so, 
+                            'date':now.strftime("%Y/%m/%d"), 
+                            'time':now.strftime("%H:%M:%S"), 
+                            'img':img_str} )
+            headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+            
+            # sending post request and saving response as response object 
+            r = requests.post(url=API_URL, data=data, headers=headers) 
+            
+            # extracting response text  
+            pastebin_url = r.text 
+            print("The pastebin URL is:%s"%pastebin_url) 
+    return lastest_number_plate
+
 def non_max_suppression(boxes, scores, threshold):	
     assert boxes.shape[0] == scores.shape[0]
     # bottom-left origin
@@ -256,31 +300,33 @@ def recognize_plate(input_image,
         boxes[0][:,2] = boxes[0][:,2]*image_resized.shape[0]
         boxes[0][:,3] = boxes[0][:,3]*image_resized.shape[1]
         # perform non-maximum suppression on the bounding boxes
-        index = non_max_suppression(boxes[0][0:n_box],scores[0][0:n_box], 0.3)
-        print("list index: ", index)
+        index = non_max_suppression(boxes[0][0:n_box],scores[0][0:n_box], 0.1)
         ratio = h_plate / image_resized.shape[0] 
-        for idx in range(9):
+        for idx in range(n_box):
             if idx not in index:
                 continue
             y1, x1, y2, x2 = boxes[0][idx][:]    
             y1_ori, x1_ori, y2_ori, x2_ori = int(y1*ratio), int(x1*ratio), int(y2*ratio), int(x2*ratio)
             h, w = y2_ori - y1_ori, x2_ori - x1_ori
-            if scores[0][idx] > threshold_score:
-
-                if w_plate / h_plate < 2: # plate with 2 lines
-                    # List down number and letter at thr bottom of plate
-                    if h_plate * 0.8 > y1_ori > h_plate * 0.3: #and h > w and h_plate / 2.8 > h > h_plate / 5:
-                        list_number.append([x1_ori, int(classes[0][idx] - 1)])
-                        cv2.rectangle(image_resized, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-                        cv2.putText(image_resized, "{}".format(int(classes[0][idx] - 1)), (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0),2)  
-                elif h >= h_plate / 2 and h > w: # plate with 1 line only
-                    list_number.append(int(classes[0][idx] - 1))
+            if scores[0][idx] > threshold_score and w_plate / h_plate < 2: # plate with 2 lines
+                # List down number and letter at thr bottom of plate
+                if h_plate * 0.8 > y1_ori > h_plate * 0.3: #and h > w and h_plate / 2.8 > h > h_plate / 5:
+                    list_number.append([x1_ori, int(classes[0][idx] - 1)])
+                    cv2.rectangle(image_resized, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+                    cv2.putText(image_resized, "{}".format(int(classes[0][idx] - 1)), (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0),2)  
+            elif scores[0][idx] > 0.005 and w_plate / h_plate >= 2 and h > w and x1 > 100:#h >= h_plate / 2 and h > w: 
+                # plate with 1 line only
+                cv2.rectangle(image_resized, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+                cv2.putText(image_resized, "{}".format(int(classes[0][idx] - 1)), (int(x1), int(y1)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0),2)  
+                list_number.append([x1_ori, int(classes[0][idx] - 1)])
 
         list_number = sorted(list_number, key= lambda x: int(x[0]))
         numbers = [number for x, number in list_number]
         list_number_plates.append(numbers)
 
         #cv2.imshow("pl", image_resized)
+    print("list number letter: ", list_number_plates)
+        
     return list_real_plate_mode, list_number_plates
 
 def crop_plate_region(input_image, vehicle_boxes, classID):
@@ -373,6 +419,7 @@ def detect_vehicle(input_image, sess, detection_boxes, detection_scores, detecti
 def send_message_arduino(arduino_moduleSim, list_index_excel):
     now = datetime.now()
     thoigian = now.strftime("%H:%M:%S %d/%m/%Y")
+    #cv2.imwrite("/Hinh_anh_vi_pham/{}.png".format(now.strftime("%H_%M_%S")), im)
     for idx in list_index_excel:
         if idx is None:
             continue
@@ -380,11 +427,11 @@ def send_message_arduino(arduino_moduleSim, list_index_excel):
         print("Message: ", message)
         arduino_moduleSim.write(message.encode())
         print("-Sent data to Arduino-")
-        time.sleep(0.1)
-        for i in range(10):
-            data = arduino_moduleSim.readline()
-            data = data.decode("utf-8").rstrip('\r\n') 
-            print(data)
+        # time.sleep(0.1)
+        # for i in range(10):
+        #     data = arduino_moduleSim.readline()
+        #     data = data.decode("utf-8").rstrip('\r\n') 
+        #     print(data)
         # while True:
         #     print(" data received: ",arduino_moduleSim.readline().decode("utf-8"))
 
@@ -472,8 +519,8 @@ num_detections_NumberLetter = detection_graph_NumberLetter.get_tensor_by_name('n
 
 ############## Set up connection between laptop and Arduino ############################
 try:                                                                                   # 
-    arduino_lighttraffic = serial.Serial("COM3", 9600 ,timeout=1)                      # 
-    arduino_moduleSim = serial.Serial("COM6", 115200 ,timeout=1)                       #    
+    #arduino_lighttraffic = serial.Serial("COM3", 9600 ,timeout=1)                      # 
+    arduino_moduleSim = serial.Serial("COM5", 115200 ,timeout=1)                       #    
     print("Found out Arduino Uno device")                                              #
 except:                                                                                #
     print("Please check the port")                                                     #
@@ -481,11 +528,11 @@ except:                                                                         
 
 ########### LOAD EXCEL FILE #####################################################################
 csv_sumary_path = "E:\\LicensePlateRecognition\\Autofill_Sumary\\Information_License_plate.xlsx"
-data = pd.read_excel(csv_sumary_path, converters={'Biển số phần 2':str, 'Biển số phần 1':str, "Số điện thoại":str})
+data = pd.read_excel(csv_sumary_path, converters={'Bien_so_phan_2':str, 'Bien_so_phan_1':str, "So_DT":str})
 # Duyet 1 cot
-list_num_plates_excel = list(data["Biển số phần 2"])
-list_num_plates_1 = list(data["Biển số phần 1"])
-list_number_phones = list(data["Số điện thoại"])
+list_num_plates_excel = list(data["Bien_so_phan_2"])
+list_num_plates_1 = list(data["Bien_so_phan_1"])
+list_number_phones = list(data["So_DT"])
 
 ##################################################################################################
 def check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected, list_full_number_plates):
@@ -505,7 +552,7 @@ def check_number_plate(list_number_plates, list_num_plates_excel, list_num_plate
             else:
                 for num_plate in list_num_plates_excel:
                     for i in range(5):
-                        if num_plate.replace(num_plate[i], '') == num_plate_predict.replace(num_plate_predict[i], ''):
+                        if num_plate[:i] + num_plate[i+1:5] == num_plate[:i] + num_plate[i+1:5]:
                             print("80%")   
                             flag_matching = True      
                             index_excel = list_num_plates_excel.index(num_plate)   
@@ -513,14 +560,14 @@ def check_number_plate(list_number_plates, list_num_plates_excel, list_num_plate
         elif len(num_plate_predict) == 4: 
             for num_plate in list_num_plates_excel:
                 for i in range(5):
-                    if num_plate.replace(num_plate[i],'') == num_plate_predict:
+                    if num_plate[:i] + num_plate[i+1:5] == num_plate_predict:
                         print("80%")  
                         flag_matching = True 
                         index_excel = list_num_plates_excel.index(num_plate)
         elif len(num_plate_predict) == 3:
             for num_plate in list_num_plates_excel:
                 for i in range(4):
-                    if num_plate.replace(num_plate[i:i+2],'') == num_plate_predict:
+                    if num_plate[:i] + num_plate[i+2:5] == num_plate_predict:
                         print("60%")  
                         flag_matching = True 
                         index_excel = list_num_plates_excel.index(num_plate)
@@ -561,10 +608,11 @@ if __name__=="__main__":
     list_index_plate_excel_detected = []
     list_full_number_plates = []
     flag_red_light = True
-    path = "E:\\project\\data_test4"
-    files = [i for i in os.listdir(path) if i.endswith(".png") ]
+    path = "E:\\project\\data_test2"
+    files = [i for i in os.listdir(path) if i.endswith(".png")]
     class_text = ["Background","motorbike", "car"]
     first_frame = True
+    lastest_number_plate = []
     for filename in files:
 
         # time.sleep(0.5)
@@ -607,7 +655,7 @@ if __name__=="__main__":
                                                         detection_classes_LicensePlate, 
                                                         num_detections_LicensePlate, 
                                                         image_tensor_LicensePlate,
-                                                        threshold_score=0.003)   
+                                                        threshold_score=0.003)
         list_real_plate_mode, list_number_plates = recognize_plate(image_ori, 
                                                                 list_License_Plate_box,
                                                                 sess_NumberLetter,
@@ -617,9 +665,8 @@ if __name__=="__main__":
                                                                 num_detections_NumberLetter,
                                                                 image_tensor_NumberLetter,
                                                                 threshold_score=0.2)
-
-        list_index_plate_excel_detected, list_full_number_plates = check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected, list_full_number_plates)
-        print(list_full_number_plates)
+        if len(list_full_number_plates) == 0: 
+            list_index_plate_excel_detected, list_full_number_plates = check_number_plate(list_number_plates, list_num_plates_excel, list_num_plates_1, list_index_plate_excel_detected, list_full_number_plates)
         list_traffic_violation_mode = check_pass_red_light(vehicle_boxes, slope, intercept)
 
         image_ori = visualize_image(image_ori, list_License_Plate_box, 
@@ -628,19 +675,22 @@ if __name__=="__main__":
                                     flag_red_light,
                                     list_traffic_violation_mode,
                                     mask_line)
-        print("index: ",list_index_plate_excel_detected)
+        
         if flag_red_light and True in list_traffic_violation_mode:
-            vuot_den_do_audio()
             #send_message_arduino(arduino_moduleSim, list_index_plate_excel_detected)
+            lastest_number_plate = post_API(image_ori ,list_index_plate_excel_detected, lastest_number_plate)
+            #vuot_den_do_audio()
             list_full_number_plates = []
             list_index_plate_excel_detected = []
+            
         if not flag_red_light:
             list_index_plate_excel_detected = []
             #list_full_number_plates = []
        
         #cv2.imwrite("E:\\project\\result\\"+ filename, image_ori)
+        print("FPS: ",1/(time.time()- start))
         cv2.imshow("", image_ori) 
-        if cv2.waitKey(0) == 27:
+        if cv2.waitKey() == 27:
             break
         print("timing: ",time.time() - start)
     cv2.destroyAllWindows()

@@ -12,7 +12,7 @@
 #define xanh2     8
 #define vang2     12
 int  xanhdem, dodem, dem, chuc1,chuc2, donvi1, donvi2;
-int giaydung=950;
+int giaydung=980;
 
 const unsigned char MA7DOAN[16]= {0XC0,0XF9,0xA4,0XB0,0X99,0X92,0X82,0XF8,0X80,0X90,0x88, 0x83, 0xC6, 0xA1, 0x86, 0x8E};
 void setup()
@@ -26,7 +26,7 @@ void setup()
   pinMode(xanh2, OUTPUT);
   pinMode(vang2, OUTPUT);
   Serial.begin(9600);
-  delay(8000);
+  delay(3000);
   }
 
 void loop()
